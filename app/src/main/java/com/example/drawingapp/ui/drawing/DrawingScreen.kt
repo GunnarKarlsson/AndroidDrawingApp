@@ -126,33 +126,27 @@ private val BG_COLOR_PALETTE = listOf(
 )
 
 @Composable
-private fun StrokeCapButton(
-    cap: StrokeCapStyle,
-    selected: Boolean,
+private fun StrokeCapToggleButton(
+    currentCap: StrokeCapStyle,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val strokeCap = if (cap == StrokeCapStyle.ROUND) StrokeCap.Round else StrokeCap.Butt
+    val strokeCap = if (currentCap == StrokeCapStyle.ROUND) StrokeCap.Round else StrokeCap.Butt
     val lineColor = MaterialTheme.colorScheme.onSurface
     Box(
         modifier = modifier
             .size(40.dp)
             .padding(4.dp)
-            .then(
-                if (selected) Modifier.background(
-                    MaterialTheme.colorScheme.primaryContainer,
-                    RoundedCornerShape(8.dp)
-                ) else Modifier
-            )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Canvas(Modifier.size(24.dp)) {
-            val lineWidth = 3.dp.toPx()
-            val half = size.minDimension / 2f
+        // Show only the end of a line (thick): segment from off-screen left so one cap is visible
+        Canvas(Modifier.size(28.dp)) {
+            val lineWidth = 8.dp.toPx()
+            val centerY = size.height / 2f
             val path = Path().apply {
-                moveTo(half, 2.dp.toPx())
-                lineTo(half, size.maxDimension - 2.dp.toPx())
+                moveTo(-lineWidth, centerY)
+                lineTo(size.width - 4.dp.toPx(), centerY)
             }
             drawPath(
                 path = path,
@@ -274,20 +268,11 @@ fun DrawingScreen(
                                 label = { Text("Pencil") }
                             )
                         }
-                        StrokeCapButton(
-                            cap = StrokeCapStyle.ROUND,
-                            selected = strokeCapStyle == StrokeCapStyle.ROUND,
+                        StrokeCapToggleButton(
+                            currentCap = strokeCapStyle,
                             onClick = {
-                                strokeCapStyle = StrokeCapStyle.ROUND
-                                onSaveStrokeCap(StrokeCapStyle.ROUND)
-                            }
-                        )
-                        StrokeCapButton(
-                            cap = StrokeCapStyle.BUTT,
-                            selected = strokeCapStyle == StrokeCapStyle.BUTT,
-                            onClick = {
-                                strokeCapStyle = StrokeCapStyle.BUTT
-                                onSaveStrokeCap(StrokeCapStyle.BUTT)
+                                strokeCapStyle = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeCapStyle.BUTT else StrokeCapStyle.ROUND
+                                onSaveStrokeCap(strokeCapStyle)
                             }
                         )
                         Box(
