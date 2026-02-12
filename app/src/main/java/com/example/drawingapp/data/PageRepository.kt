@@ -40,4 +40,10 @@ class PageRepository(private val store: LocalPageStore) {
     fun savePageBackgroundColor(pageId: String, color: Int) {
         store.savePageBackgroundColor(pageId, color)
     }
+
+    fun loadStrokeSizePx(defaultValue: Float): Float = store.loadStrokeSizePx(defaultValue)
+
+    fun saveStrokeSizePx(value: Float) {
+        store.saveStrokeSizePx(value)
+    }
 }

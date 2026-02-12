@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,8 +51,8 @@ import com.example.drawingapp.data.DrawTool
 import com.example.drawingapp.data.Stroke
 
 private const val PENCIL_ALPHA = 0.75f
-private const val DEFAULT_STROKE_SIZE_PX = 4f
-private val STROKE_SIZE_RANGE = 1f..24f
+private val STROKE_SIZE_RANGE = 1f..64f
+private const val DEFAULT_STROKE_SIZE_PX = 20f // ~30% into 1..64
 private val DEFAULT_COLOR = Color.Black
 
 private val COLOR_PALETTE = listOf(
@@ -74,6 +73,8 @@ fun DrawingScreen(
     onLoadBackgroundColor: (String) -> Int,
     onSaveBackgroundColor: (String, Int) -> Unit,
     onExport: (Bitmap) -> Unit,
+    initialStrokeSizePx: Float = DEFAULT_STROKE_SIZE_PX,
+    onSaveStrokeSizePx: (Float) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val layerStates = remember(pageId) { mutableStateListOf<LayerState>() }
@@ -82,7 +83,9 @@ fun DrawingScreen(
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var selectedTool by remember { mutableStateOf(DrawTool.Pen) }
     var selectedColor by remember { mutableStateOf(DEFAULT_COLOR) }
-    var strokeSizePx by remember { mutableStateOf(DEFAULT_STROKE_SIZE_PX) }
+    var strokeSizePx by remember(initialStrokeSizePx) {
+        mutableStateOf(initialStrokeSizePx.coerceIn(STROKE_SIZE_RANGE))
+    }
     var backgroundColor by remember(pageId) { mutableStateOf(0xFFFFFFFF.toInt()) }
     var initialized by remember(pageId) { mutableStateOf(false) }
 
@@ -211,10 +214,13 @@ fun DrawingScreen(
                 PreviewDot(strokeWidth = strokeWidth, strokeColor = strokeColor)
                 Slider(
                     value = strokeSizePx,
-                    onValueChange = { strokeSizePx = it },
+                    onValueChange = {
+                        strokeSizePx = it
+                        onSaveStrokeSizePx(it)
+                    },
                     valueRange = STROKE_SIZE_RANGE,
-                    steps = 22,
-                    modifier = Modifier.widthIn(min = 80.dp, max = 160.dp)
+                    steps = 62,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
             Box(modifier = Modifier.fillMaxSize()) {

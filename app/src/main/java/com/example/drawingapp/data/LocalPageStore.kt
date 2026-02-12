@@ -12,6 +12,7 @@ import java.io.FileOutputStream
 
 private const val PREFS_NAME = "drawing_app"
 private const val KEY_PAGE_IDS = "page_ids"
+private const val KEY_STROKE_SIZE_PX = "stroke_size_px"
 private const val PAGES_DIR = "pages"
 private const val META_FILE = "meta.json"
 
@@ -26,6 +27,13 @@ class LocalPageStore(context: Context) {
 
     fun savePageIds(ids: List<String>) {
         prefs.edit().putStringSet(KEY_PAGE_IDS, ids.toSet()).apply()
+    }
+
+    fun loadStrokeSizePx(defaultValue: Float): Float =
+        prefs.getFloat(KEY_STROKE_SIZE_PX, defaultValue)
+
+    fun saveStrokeSizePx(value: Float) {
+        prefs.edit().putFloat(KEY_STROKE_SIZE_PX, value).apply()
     }
 
     /** Legacy: load single bitmap (first layer or old pageId.png). */

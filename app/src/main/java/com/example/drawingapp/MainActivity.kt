@@ -78,6 +78,7 @@ class MainActivity : ComponentActivity() {
                             arguments = listOf(navArgument("pageId") { type = NavType.StringType })
                         ) { backStackEntry ->
                             val pageId = backStackEntry.arguments?.getString("pageId") ?: return@composable
+                            val defaultStrokeSize = 20f
                             DrawingScreen(
                                 pageId = pageId,
                                 onLoadLayers = { repo.loadPageLayers(it) },
@@ -88,7 +89,9 @@ class MainActivity : ComponentActivity() {
                                     exportDrawingAsPng(context, bmp)?.let { uri ->
                                         shareUri(context, uri)
                                     }
-                                }
+                                },
+                                initialStrokeSizePx = remember { repo.loadStrokeSizePx(defaultStrokeSize) },
+                                onSaveStrokeSizePx = { repo.saveStrokeSizePx(it) }
                             )
                         }
                     }
