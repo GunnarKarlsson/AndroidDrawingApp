@@ -1,6 +1,7 @@
 package com.example.drawingapp
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -87,6 +88,7 @@ class MainActivity : ComponentActivity() {
                                 onSaveBackgroundColor = { id, color -> repo.savePageBackgroundColor(id, color) },
                                 onExport = { bmp ->
                                     exportDrawingAsPng(context, bmp)?.let { uri ->
+                                        Toast.makeText(context, "Saved to DrawingApp/images", Toast.LENGTH_SHORT).show()
                                         shareUri(context, uri)
                                     }
                                 },

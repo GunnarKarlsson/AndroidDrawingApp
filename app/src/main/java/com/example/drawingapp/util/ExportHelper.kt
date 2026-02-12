@@ -12,9 +12,16 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private const val EXPORT_SUBDIR = "DrawingApp/images"
+
+fun getExportDirectoryPath(context: Context): String {
+    val dir = File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), EXPORT_SUBDIR)
+    return dir.absolutePath
+}
+
 fun exportDrawingAsPng(context: Context, bitmap: Bitmap): Uri? {
     val name = "drawing_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.png"
-    val picturesDir = File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), "Exports")
+    val picturesDir = File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), EXPORT_SUBDIR)
     picturesDir.mkdirs()
     val file = File(picturesDir, name)
     return try {

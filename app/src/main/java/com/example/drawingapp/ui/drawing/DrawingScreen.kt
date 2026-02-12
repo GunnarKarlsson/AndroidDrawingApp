@@ -3,6 +3,7 @@ package com.example.drawingapp.ui.drawing
 import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.Rect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -49,6 +51,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.example.drawingapp.data.DrawTool
 import com.example.drawingapp.data.Stroke
+import com.example.drawingapp.util.getExportDirectoryPath
+import java.io.ByteArrayOutputStream
 
 private const val PENCIL_ALPHA = 0.75f
 private val STROKE_SIZE_RANGE = 1f..64f
@@ -88,6 +92,8 @@ fun DrawingScreen(
     }
     var backgroundColor by remember(pageId) { mutableStateOf(0xFFFFFFFF.toInt()) }
     var initialized by remember(pageId) { mutableStateOf(false) }
+    var showExportDialog by remember { mutableStateOf(false) }
+    var exportBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     val strokeWidth = strokeSizePx
     val strokeColor = when (selectedTool) {
@@ -202,7 +208,12 @@ fun DrawingScreen(
                             )
                         }
                         TextButton(onClick = { undo() }) { Text("Undo") }
-                        TextButton(onClick = { compositeLayers()?.let { onExport(it) } }) { Text("Export") }
+                        TextButton(onClick = {
+                            compositeLayers()?.let { bmp ->
+                                exportBitmap = bmp
+                                showExportDialog = true
+                            }
+                        }) { Text("Export") }
                     }
                 }
             )
@@ -335,6 +346,47 @@ fun DrawingScreen(
             }
         }
         }
+    }
+    if (showExportDialog && exportBitmap != null) {
+        val context = LocalContext.current
+        val bmp = exportBitmap!!
+        val fileSizeBytes = ByteArrayOutputStream().use { out ->
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
+            out.size()
+        }
+        val fileSizeStr = if (fileSizeBytes >= 1024 * 1024) {
+            "%.1f MB".format(fileSizeBytes / (1024.0 * 1024.0))
+        } else {
+            "%.1f KB".format(fileSizeBytes / 1024.0)
+        }
+        val savePath = getExportDirectoryPath(context)
+        AlertDialog(
+            onDismissRequest = {
+                showExportDialog = false
+                exportBitmap = null
+            },
+            title = { Text("Export drawing") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(text = "Dimensions: ${bmp.width} × ${bmp.height}")
+                    Text(text = "File size: ~$fileSizeStr")
+                    Text(text = "Save location: $savePath")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onExport(bmp)
+                    showExportDialog = false
+                    exportBitmap = null
+                }) { Text("Export") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showExportDialog = false
+                    exportBitmap = null
+                }) { Text("Cancel") }
+            }
+        )
     }
 }
 
