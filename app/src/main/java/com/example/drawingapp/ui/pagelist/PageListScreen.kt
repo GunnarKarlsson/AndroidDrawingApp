@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -52,6 +55,7 @@ fun PageListScreen(
     pages: List<Page>,
     onAddPage: () -> Unit,
     onPageClick: (Page) -> Unit,
+    onDeletePage: (Page) -> Unit,
     onLoadThumbnail: (suspend (String) -> Bitmap?)? = null,
     onBackup: (suspend () -> Result<Unit>)? = null,
     onRestore: (suspend () -> Result<Unit>)? = null,
@@ -138,7 +142,8 @@ fun PageListScreen(
                     PageCard(
                         page = page,
                         onLoadThumbnail = onLoadThumbnail,
-                        onClick = { onPageClick(page) }
+                        onClick = { onPageClick(page) },
+                        onDelete = { onDeletePage(page) }
                     )
                 }
             }
@@ -151,6 +156,7 @@ private fun PageCard(
     page: Page,
     onLoadThumbnail: (suspend (String) -> Bitmap?)?,
     onClick: () -> Unit,
+    onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var thumbnail by remember(page.id) { mutableStateOf<Bitmap?>(null) }
@@ -188,6 +194,17 @@ private fun PageCard(
                     modifier = Modifier.align(Alignment.Center)
                 )
             }
+            // Delete icon in lower right corner
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = "Delete ${page.title}",
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(8.dp)
+                    .size(24.dp)
+                    .clickable(onClick = onDelete)
+            )
         }
     }
 }

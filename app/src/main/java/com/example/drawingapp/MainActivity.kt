@@ -67,6 +67,11 @@ class MainActivity : ComponentActivity() {
                                 onPageClick = { page ->
                                     navController.navigate("drawing/${page.id}")
                                 },
+                                onDeletePage = { page ->
+                                    repo.deletePage(page.id)
+                                    pages.clear()
+                                    pages.addAll(repo.pages)
+                                },
                                 onLoadThumbnail = { pageId -> withContext(Dispatchers.IO) { repo.loadPageThumbnail(pageId) } },
                                 onBackup = { s3Backup.backup() },
                                 onRestore = { s3Backup.restore() },

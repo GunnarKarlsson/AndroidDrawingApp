@@ -58,4 +58,10 @@ class PageRepository(private val store: LocalPageStore) {
     fun saveStrokeCap(value: Int) {
         store.saveStrokeCap(value)
     }
+
+    fun deletePage(pageId: String) {
+        _pages.removeAll { it.id == pageId }
+        store.savePageIds(_pages.map { it.id })
+        store.deletePage(pageId)
+    }
 }

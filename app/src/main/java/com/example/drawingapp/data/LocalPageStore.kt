@@ -147,4 +147,24 @@ class LocalPageStore(context: Context) {
         }
         return thumbnail
     }
+
+    /**
+     * Delete a page and all its associated files (layers, metadata, legacy PNG).
+     */
+    fun deletePage(pageId: String) {
+        try {
+            val pageDir = File(pagesDir, pageId)
+            if (pageDir.exists() && pageDir.isDirectory) {
+                // Delete the entire directory and all its contents
+                pageDir.deleteRecursively()
+            }
+            // Also handle legacy single PNG file
+            val legacyFile = File(pagesDir, "$pageId.png")
+            if (legacyFile.exists()) {
+                legacyFile.delete()
+            }
+        } catch (e: Exception) {
+            Log.e("LocalPageStore", "Failed to delete page $pageId", e)
+        }
+    }
 }
