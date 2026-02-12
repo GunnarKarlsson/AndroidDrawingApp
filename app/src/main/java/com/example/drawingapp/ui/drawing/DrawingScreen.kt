@@ -380,6 +380,7 @@ fun DrawingScreen(
                     },
                     valueRange = STROKE_SIZE_RANGE,
                     steps = 62,
+                    enabled = true, // Always enabled, including for eraser tool
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -771,6 +772,7 @@ private fun PreviewDot(
     tool: DrawTool,
     modifier: Modifier = Modifier
 ) {
+    val borderColor = MaterialTheme.colorScheme.onSurface
     Box(
         modifier = modifier
             .size(48.dp)
@@ -779,19 +781,20 @@ private fun PreviewDot(
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             if (tool == DrawTool.Eraser) {
-                // For eraser, show a red X indicator
-                val lineWidth = 3.dp.toPx()
-                val padding = 8.dp.toPx()
-                val path = Path().apply {
-                    moveTo(padding, padding)
-                    lineTo(size.width - padding, size.height - padding)
-                    moveTo(size.width - padding, padding)
-                    lineTo(padding, size.height - padding)
-                }
-                drawPath(
-                    path = path,
-                    color = Color.Red,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = lineWidth)
+                // For eraser, show a circle with white interior and border to indicate size
+                val radius = strokeWidth / 2f
+                // Draw white filled circle
+                drawCircle(
+                    color = Color.White,
+                    radius = radius,
+                    center = center
+                )
+                // Draw border circle to show the size
+                drawCircle(
+                    color = borderColor,
+                    radius = radius,
+                    center = center,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
                 )
             } else {
                 drawCircle(
