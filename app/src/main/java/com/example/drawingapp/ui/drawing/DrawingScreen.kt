@@ -4,6 +4,8 @@ import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.Rect
+import android.view.ViewGroup
+import android.widget.LinearLayout
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.LifecycleOwner
 import androidx.compose.foundation.Canvas
@@ -59,6 +61,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.skydoves.colorpickerview.ActionMode
 import com.skydoves.colorpickerview.ColorPickerView
 import com.skydoves.colorpickerview.listeners.ColorEnvelopeListener
+import com.skydoves.colorpickerview.sliders.BrightnessSlideBar
 import com.example.drawingapp.data.DrawTool
 import com.example.drawingapp.data.Stroke
 import com.example.drawingapp.util.getExportDirectoryPath
@@ -444,7 +447,13 @@ fun DrawingScreen(
                     }
                     AndroidView(
                         factory = {
-                            ColorPickerView.Builder(it)
+                            val density = it.resources.displayMetrics.density
+                            val wheelSizePx = (280 * density).toInt()
+                            val sliderHeightPx = (48 * density).toInt()
+                            val column = LinearLayout(it).apply {
+                                orientation = LinearLayout.VERTICAL
+                            }
+                            val picker = ColorPickerView.Builder(it)
                                 .setInitialColor(pendingColor.toArgb())
                                 .setColorListener(ColorEnvelopeListener { envelope, _ ->
                                     pendingColor = Color(envelope.getColor())
@@ -452,12 +461,18 @@ fun DrawingScreen(
                                 .setActionMode(ActionMode.LAST)
                                 .apply { lifecycleOwner?.let { setLifecycleOwner(it) } }
                                 .build()
+                            val brightnessBar = BrightnessSlideBar(it)
+                            picker.attachBrightnessSlider(brightnessBar)
+                            column.addView(picker, ViewGroup.LayoutParams(wheelSizePx, wheelSizePx))
+                            column.addView(brightnessBar, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, sliderHeightPx))
+                            column
                         },
-                        modifier = Modifier.size(280.dp),
-                        update = { view ->
-                            if (view.width > 0 && view.height > 0) {
-                                view.setHsvPaletteDrawable()
-                                view.selectByHsvColor(pendingColor.toArgb())
+                        modifier = Modifier.size(280.dp, 320.dp),
+                        update = { root ->
+                            val picker = (root as? ViewGroup)?.getChildAt(0) as? ColorPickerView
+                            if (picker != null && picker.width > 0 && picker.height > 0) {
+                                picker.setHsvPaletteDrawable()
+                                picker.selectByHsvColor(pendingColor.toArgb())
                             }
                         }
                     )
@@ -518,7 +533,13 @@ fun DrawingScreen(
                     }
                     AndroidView(
                         factory = {
-                            ColorPickerView.Builder(it)
+                            val density = it.resources.displayMetrics.density
+                            val wheelSizePx = (280 * density).toInt()
+                            val sliderHeightPx = (48 * density).toInt()
+                            val column = LinearLayout(it).apply {
+                                orientation = LinearLayout.VERTICAL
+                            }
+                            val picker = ColorPickerView.Builder(it)
                                 .setInitialColor(pendingBgColor.toArgb())
                                 .setColorListener(ColorEnvelopeListener { envelope, _ ->
                                     pendingBgColor = Color(envelope.getColor())
@@ -526,12 +547,18 @@ fun DrawingScreen(
                                 .setActionMode(ActionMode.LAST)
                                 .apply { lifecycleOwner?.let { setLifecycleOwner(it) } }
                                 .build()
+                            val brightnessBar = BrightnessSlideBar(it)
+                            picker.attachBrightnessSlider(brightnessBar)
+                            column.addView(picker, ViewGroup.LayoutParams(wheelSizePx, wheelSizePx))
+                            column.addView(brightnessBar, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, sliderHeightPx))
+                            column
                         },
-                        modifier = Modifier.size(280.dp),
-                        update = { view ->
-                            if (view.width > 0 && view.height > 0) {
-                                view.setHsvPaletteDrawable()
-                                view.selectByHsvColor(pendingBgColor.toArgb())
+                        modifier = Modifier.size(280.dp, 320.dp),
+                        update = { root ->
+                            val picker = (root as? ViewGroup)?.getChildAt(0) as? ColorPickerView
+                            if (picker != null && picker.width > 0 && picker.height > 0) {
+                                picker.setHsvPaletteDrawable()
+                                picker.selectByHsvColor(pendingBgColor.toArgb())
                             }
                         }
                     )
