@@ -24,6 +24,8 @@ import com.example.drawingapp.util.exportDrawingAsPng
 import com.example.drawingapp.util.shareUri
 import com.example.drawingapp.ui.pagelist.PageListScreen
 import com.example.drawingapp.ui.theme.ExampleDrawingAppTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,6 +63,7 @@ class MainActivity : ComponentActivity() {
                                 onPageClick = { page ->
                                     navController.navigate("drawing/${page.id}")
                                 },
+                                onLoadThumbnail = { pageId -> withContext(Dispatchers.IO) { repo.loadPageThumbnail(pageId) } },
                                 onBackup = { s3Backup.backup() },
                                 onRestore = { s3Backup.restore() },
                                 onRestoreComplete = {

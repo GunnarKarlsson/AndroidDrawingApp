@@ -1,6 +1,8 @@
 package com.example.drawingapp.ui.pagelist
 
+import android.graphics.Bitmap
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,13 +29,22 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.drawingapp.data.Page
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +52,7 @@ fun PageListScreen(
     pages: List<Page>,
     onAddPage: () -> Unit,
     onPageClick: (Page) -> Unit,
+    onLoadThumbnail: (suspend (String) -> Bitmap?)? = null,
     onBackup: (suspend () -> Result<Unit>)? = null,
     onRestore: (suspend () -> Result<Unit>)? = null,
     onRestoreComplete: () -> Unit = {},
@@ -125,6 +137,7 @@ fun PageListScreen(
                 items(pages, key = { it.id }) { page ->
                     PageCard(
                         page = page,
+                        onLoadThumbnail = onLoadThumbnail,
                         onClick = { onPageClick(page) }
                     )
                 }
@@ -136,9 +149,14 @@ fun PageListScreen(
 @Composable
 private fun PageCard(
     page: Page,
+    onLoadThumbnail: (suspend (String) -> Bitmap?)?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var thumbnail by remember(page.id) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(page.id) {
+        thumbnail = onLoadThumbnail?.let { load -> withContext(Dispatchers.IO) { load(page.id) } }
+    }
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -147,16 +165,29 @@ private fun PageCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = page.title,
-                style = MaterialTheme.typography.titleMedium
-            )
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (thumbnail != null) {
+                Image(
+                    bitmap = thumbnail!!.asImageBitmap(),
+                    contentDescription = "Preview of ${page.title}",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                Text(
+                    text = page.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(8.dp)
+                )
+            } else {
+                Text(
+                    text = page.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
         }
     }
 }

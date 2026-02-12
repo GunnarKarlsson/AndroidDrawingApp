@@ -3,6 +3,9 @@ package com.example.drawingapp.data
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Rect
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
@@ -91,5 +94,33 @@ class LocalPageStore(context: Context) {
         } catch (e: Exception) {
             Log.e("LocalPageStore", "Failed to save layers for $pageId", e)
         }
+    }
+
+    /**
+     * Load a composite thumbnail of the page (background + all layers).
+     * This is a scaled-down version of the full drawing: we load the same layer PNGs,
+     * composite them onto a single bitmap, and scale so the longest side fits in maxSize.
+     * Using a too-small maxSize makes strokes (2–4px) become sub-pixel and look like dots.
+     */
+    fun loadPageThumbnail(pageId: String, maxSize: Int = 768): Bitmap? {
+        val layers = loadPageLayers(pageId)
+        val bgColor = loadPageBackgroundColor(pageId)
+        val firstLayer = layers.firstOrNull { it != null } ?: return null
+        val width = firstLayer.width
+        val height = firstLayer.height
+        if (width <= 0 || height <= 0) return null
+        val scale = (maxSize.toFloat() / maxOf(width, height)).coerceAtMost(1f)
+        val thumbWidth = (width * scale).toInt().coerceAtLeast(1)
+        val thumbHeight = (height * scale).toInt().coerceAtLeast(1)
+        val thumbnail = Bitmap.createBitmap(thumbWidth, thumbHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(thumbnail)
+        canvas.drawColor(bgColor)
+        val srcRect = Rect(0, 0, width, height)
+        val dstRect = Rect(0, 0, thumbWidth, thumbHeight)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        layers.forEach { layer ->
+            layer?.let { canvas.drawBitmap(it, srcRect, dstRect, paint) }
+        }
+        return thumbnail
     }
 }

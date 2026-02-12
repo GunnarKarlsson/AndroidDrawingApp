@@ -23,6 +23,8 @@ class PageRepository(private val store: LocalPageStore) {
 
     fun loadPageBitmap(pageId: String): Bitmap? = store.loadPageBitmap(pageId)
 
+    fun loadPageThumbnail(pageId: String): Bitmap? = store.loadPageThumbnail(pageId)
+
     fun savePageBitmap(pageId: String, bitmap: Bitmap) {
         store.savePageBitmap(pageId, bitmap)
     }
