@@ -19,5 +19,7 @@ data class Stroke(
 
 enum class DrawTool {
     Pen,
-    Pencil
+    Pencil,
+    MarkerPen,
+    Eraser
 }

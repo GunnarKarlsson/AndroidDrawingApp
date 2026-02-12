@@ -38,7 +38,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.example.drawingapp.R
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -89,6 +92,26 @@ private const val PENCIL_ALPHA = 0.75f
 private val STROKE_SIZE_RANGE = 1f..64f
 private const val DEFAULT_STROKE_SIZE_PX = 20f // ~30% into 1..64
 private val DEFAULT_COLOR = Color.Black
+
+@Composable
+private fun getToolIconRes(tool: DrawTool): Int {
+    return when (tool) {
+        DrawTool.Pen -> R.drawable.ic_pen
+        DrawTool.Pencil -> R.drawable.ic_pencil
+        DrawTool.MarkerPen -> R.drawable.ic_marker
+        DrawTool.Eraser -> R.drawable.ic_eraser
+    }
+}
+
+@Composable
+private fun getToolDisplayName(tool: DrawTool): String {
+    return when (tool) {
+        DrawTool.Pen -> "Pen"
+        DrawTool.Pencil -> "Pencil"
+        DrawTool.MarkerPen -> "Marker Pen"
+        DrawTool.Eraser -> "Eraser"
+    }
+}
 
 private fun colorFromHsv(hue: Float, saturation: Float, value: Float): Color {
     val h = hue.coerceIn(0f, 360f) / 60f
@@ -220,11 +243,14 @@ fun DrawingScreen(
     var showExportDialog by remember { mutableStateOf(false) }
     var exportBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var showLayerManagerDialog by remember { mutableStateOf(false) }
+    var showToolSelectionModal by remember { mutableStateOf(false) }
 
     val strokeWidth = strokeSizePx
     val strokeColor = when (selectedTool) {
         DrawTool.Pen -> selectedColor
         DrawTool.Pencil -> selectedColor.copy(alpha = PENCIL_ALPHA)
+        DrawTool.MarkerPen -> selectedColor.copy(alpha = 0.6f) // Semi-transparent for marker effect
+        DrawTool.Eraser -> Color.Transparent // Eraser uses transparent color
     }
 
     fun saveAllLayers() {
@@ -282,18 +308,13 @@ fun DrawingScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.padding(horizontal = 0.dp)) {
-                            SegmentedButton(
-                                selected = selectedTool == DrawTool.Pen,
-                                onClick = { selectedTool = DrawTool.Pen },
-                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                                label = { Text("Pen") }
-                            )
-                            SegmentedButton(
-                                selected = selectedTool == DrawTool.Pencil,
-                                onClick = { selectedTool = DrawTool.Pencil },
-                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                                label = { Text("Pencil") }
+                        IconButton(
+                            onClick = { showToolSelectionModal = true }
+                        ) {
+                            Icon(
+                                painter = painterResource(id = getToolIconRes(selectedTool)),
+                                contentDescription = getToolDisplayName(selectedTool),
+                                tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         StrokeCapToggleButton(
@@ -346,7 +367,11 @@ fun DrawingScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                PreviewDot(strokeWidth = strokeWidth, strokeColor = strokeColor)
+                PreviewDot(
+                    strokeWidth = strokeWidth,
+                    strokeColor = strokeColor,
+                    tool = selectedTool
+                )
                 Slider(
                     value = strokeSizePx,
                     onValueChange = {
@@ -435,15 +460,29 @@ fun DrawingScreen(
                                     if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y)
                                 }
                             }
-                            drawPath(
-                                path = path,
-                                color = strokeColor,
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                                    width = strokeWidth,
-                                    cap = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeCap.Round else StrokeCap.Butt,
-                                    join = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeJoin.Round else StrokeJoin.Bevel
+                            if (selectedTool == DrawTool.Eraser) {
+                                // For eraser, show a red dashed line preview
+                                drawPath(
+                                    path = path,
+                                    color = Color.Red.copy(alpha = 0.5f),
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                        width = strokeWidth,
+                                        cap = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeCap.Round else StrokeCap.Butt,
+                                        join = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeJoin.Round else StrokeJoin.Bevel,
+                                        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
+                                    )
                                 )
-                            )
+                            } else {
+                                drawPath(
+                                    path = path,
+                                    color = strokeColor,
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                        width = strokeWidth,
+                                        cap = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeCap.Round else StrokeCap.Butt,
+                                        join = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeJoin.Round else StrokeJoin.Bevel
+                                    )
+                                )
+                            }
                         }
                         // Draw layers above the current layer
                         for (i in (currentLayerIndex + 1) until layerStates.size) {
@@ -610,6 +649,17 @@ fun DrawingScreen(
         )
     }
     
+    if (showToolSelectionModal) {
+        ToolSelectionDialog(
+            selectedTool = selectedTool,
+            onToolSelected = { tool ->
+                selectedTool = tool
+                showToolSelectionModal = false
+            },
+            onDismiss = { showToolSelectionModal = false }
+        )
+    }
+    
     if (showBgColorPickerModal) {
         val context = LocalContext.current
         val lifecycleOwner = (context as? Activity) as? LifecycleOwner
@@ -718,6 +768,7 @@ fun DrawingScreen(
 private fun PreviewDot(
     strokeWidth: Float,
     strokeColor: Color,
+    tool: DrawTool,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -727,11 +778,28 @@ private fun PreviewDot(
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            drawCircle(
-                color = strokeColor,
-                radius = strokeWidth / 2f,
-                center = center
-            )
+            if (tool == DrawTool.Eraser) {
+                // For eraser, show a red X indicator
+                val lineWidth = 3.dp.toPx()
+                val padding = 8.dp.toPx()
+                val path = Path().apply {
+                    moveTo(padding, padding)
+                    lineTo(size.width - padding, size.height - padding)
+                    moveTo(size.width - padding, padding)
+                    lineTo(padding, size.height - padding)
+                }
+                drawPath(
+                    path = path,
+                    color = Color.Red,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = lineWidth)
+                )
+            } else {
+                drawCircle(
+                    color = strokeColor,
+                    radius = strokeWidth / 2f,
+                    center = center
+                )
+            }
         }
     }
 }
@@ -746,6 +814,10 @@ private fun drawStrokeOnBitmap(bitmap: Bitmap?, stroke: Stroke) {
         isAntiAlias = true
         strokeJoin = if (stroke.strokeCapStyle == StrokeCapStyle.ROUND) Paint.Join.ROUND else Paint.Join.BEVEL
         strokeCap = if (stroke.strokeCapStyle == StrokeCapStyle.ROUND) Paint.Cap.ROUND else Paint.Cap.BUTT
+        // For eraser, use CLEAR blend mode to erase pixels
+        if (stroke.tool == DrawTool.Eraser) {
+            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+        }
     }
     val path = android.graphics.Path()
     stroke.points.forEachIndexed { index, offset ->
@@ -918,6 +990,71 @@ private fun LayerManagerDialog(
                                 text = "Layer ${originalIndex + 1}",
                                 style = MaterialTheme.typography.bodyLarge
                             )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
+}
+
+@Composable
+private fun ToolSelectionDialog(
+    selectedTool: DrawTool,
+    onToolSelected: (DrawTool) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val allTools = listOf(DrawTool.Pen, DrawTool.Pencil, DrawTool.MarkerPen, DrawTool.Eraser)
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select Tool") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                allTools.forEach { tool ->
+                    val isSelected = tool == selectedTool
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                RoundedCornerShape(8.dp)
+                            )
+                            .clickable { onToolSelected(tool) }
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Tool icon
+                        Icon(
+                            painter = painterResource(id = getToolIconRes(tool)),
+                            contentDescription = getToolDisplayName(tool),
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        
+                        // Tool name
+                        Text(
+                            text = getToolDisplayName(tool),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                        
+                        // Checkmark
+                        if (isSelected) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = "Selected",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        } else {
+                            Box(modifier = Modifier.size(24.dp))
                         }
                     }
                 }
