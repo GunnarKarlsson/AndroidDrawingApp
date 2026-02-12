@@ -50,6 +50,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -403,7 +404,8 @@ fun DrawingScreen(
                                 color = strokeColor,
                                 style = androidx.compose.ui.graphics.drawscope.Stroke(
                                     width = strokeWidth,
-                                    cap = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeCap.Round else StrokeCap.Butt
+                                    cap = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeCap.Round else StrokeCap.Butt,
+                                    join = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeJoin.Round else StrokeJoin.Bevel
                                 )
                             )
                         }
@@ -718,7 +720,7 @@ private fun drawStrokeOnBitmap(bitmap: Bitmap?, stroke: Stroke) {
         style = Paint.Style.STROKE
         strokeWidth = stroke.strokeWidth
         isAntiAlias = true
-        strokeJoin = Paint.Join.ROUND
+        strokeJoin = if (stroke.strokeCapStyle == StrokeCapStyle.ROUND) Paint.Join.ROUND else Paint.Join.BEVEL
         strokeCap = if (stroke.strokeCapStyle == StrokeCapStyle.ROUND) Paint.Cap.ROUND else Paint.Cap.BUTT
     }
     val path = android.graphics.Path()
