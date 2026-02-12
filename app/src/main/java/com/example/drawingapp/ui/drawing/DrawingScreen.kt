@@ -346,7 +346,13 @@ fun DrawingScreen(
                                 }
                         )
                         TextButton(onClick = { undo() }) { Text("Undo") }
-                        TextButton(onClick = { showLayerManagerDialog = true }) { Text("Layers") }
+                        IconButton(onClick = { showLayerManagerDialog = true }) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_layers),
+                                contentDescription = "Layers",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                         TextButton(onClick = {
                             compositeLayers()?.let { bmp ->
                                 exportBitmap = bmp
