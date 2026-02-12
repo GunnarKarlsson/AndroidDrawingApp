@@ -3,6 +3,7 @@ package com.example.drawingapp.ui.pagelist
 import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,12 +15,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -64,6 +68,7 @@ fun PageListScreen(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var pageToDelete by remember { mutableStateOf<Page?>(null) }
 
     Scaffold(
         modifier = modifier,
@@ -143,10 +148,36 @@ fun PageListScreen(
                         page = page,
                         onLoadThumbnail = onLoadThumbnail,
                         onClick = { onPageClick(page) },
-                        onDelete = { onDeletePage(page) }
+                        onDelete = { pageToDelete = page }
                     )
                 }
             }
+        }
+        
+        // Delete confirmation dialog
+        pageToDelete?.let { page ->
+            AlertDialog(
+                onDismissRequest = { pageToDelete = null },
+                title = { Text("Delete Image") },
+                text = { Text("Are you sure you want to delete this image?") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            onDeletePage(page)
+                            pageToDelete = null
+                        }
+                    ) {
+                        Text("Confirm")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { pageToDelete = null }
+                    ) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
     }
 }
@@ -194,17 +225,26 @@ private fun PageCard(
                     modifier = Modifier.align(Alignment.Center)
                 )
             }
-            // Delete icon in lower right corner
-            Icon(
-                imageVector = Icons.Default.Delete,
-                contentDescription = "Delete ${page.title}",
-                tint = MaterialTheme.colorScheme.error,
+            // Delete icon in lower right corner - grey icon on white rounded square
+            Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(8.dp)
-                    .size(24.dp)
-                    .clickable(onClick = onDelete)
-            )
+                    .size(32.dp)
+                    .background(
+                        color = Color.White,
+                        shape = RoundedCornerShape(6.dp)
+                    )
+                    .clickable(onClick = onDelete),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete ${page.title}",
+                    tint = Color.Gray,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }
