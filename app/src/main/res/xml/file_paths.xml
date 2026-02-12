@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <external-files-path name="exports" path="Pictures/DrawingApp/images" />
+    <external-path name="pictures_drawing_app" path="Pictures/DrawingApp" />
 </paths>

@@ -88,7 +88,7 @@ class MainActivity : ComponentActivity() {
                                 onSaveBackgroundColor = { id, color -> repo.savePageBackgroundColor(id, color) },
                                 onExport = { bmp ->
                                     exportDrawingAsPng(context, bmp)?.let { uri ->
-                                        Toast.makeText(context, "Saved to DrawingApp/images", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Saved to Pictures/DrawingApp", Toast.LENGTH_SHORT).show()
                                         shareUri(context, uri)
                                     }
                                 },
