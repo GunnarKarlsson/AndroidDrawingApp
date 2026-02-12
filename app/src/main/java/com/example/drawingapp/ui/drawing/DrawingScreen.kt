@@ -4,6 +4,7 @@ import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.drawable.GradientDrawable
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import androidx.compose.ui.platform.LocalContext
@@ -97,6 +98,19 @@ private fun colorFromHsv(hue: Float, saturation: Float, value: Float): Color {
 
 private val DESATURATED_PRESETS = listOf(0f, 30f, 60f, 90f, 120f, 150f, 180f, 210f, 240f, 270f, 300f, 330f).map { hue ->
     colorFromHsv(hue, 0.55f, 0.9f)
+}
+
+/** Returns HSV value (0f..1f) for the given color, for brightness slider position. */
+private fun colorToHsvValue(color: androidx.compose.ui.graphics.Color): Float {
+    val argb = color.toArgb()
+    val hsv = FloatArray(3)
+    android.graphics.Color.RGBToHSV(
+        android.graphics.Color.red(argb),
+        android.graphics.Color.green(argb),
+        android.graphics.Color.blue(argb),
+        hsv
+    )
+    return hsv[2]
 }
 
 private val BG_COLOR_PALETTE = listOf(
@@ -461,7 +475,14 @@ fun DrawingScreen(
                                 .setActionMode(ActionMode.LAST)
                                 .apply { lifecycleOwner?.let { setLifecycleOwner(it) } }
                                 .build()
-                            val brightnessBar = BrightnessSlideBar(it)
+                            val brightnessBar = BrightnessSlideBar(it).apply {
+                                val whiteLine = GradientDrawable().apply {
+                                    setColor(android.graphics.Color.WHITE)
+                                    setShape(GradientDrawable.RECTANGLE)
+                                    setSize((4 * density).toInt(), sliderHeightPx)
+                                }
+                                setSelectorDrawable(whiteLine)
+                            }
                             picker.attachBrightnessSlider(brightnessBar)
                             column.addView(picker, ViewGroup.LayoutParams(wheelSizePx, wheelSizePx))
                             column.addView(brightnessBar, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, sliderHeightPx))
@@ -469,10 +490,17 @@ fun DrawingScreen(
                         },
                         modifier = Modifier.size(280.dp, 320.dp),
                         update = { root ->
-                            val picker = (root as? ViewGroup)?.getChildAt(0) as? ColorPickerView
-                            if (picker != null && picker.width > 0 && picker.height > 0) {
-                                picker.setHsvPaletteDrawable()
-                                picker.selectByHsvColor(pendingColor.toArgb())
+                            val column = root as? ViewGroup
+                            if (column != null) {
+                                val picker = column.getChildAt(0) as? ColorPickerView
+                                val brightnessBar = column.getChildAt(1) as? BrightnessSlideBar
+                                if (picker != null && picker.width > 0 && picker.height > 0) {
+                                    picker.setHsvPaletteDrawable()
+                                    picker.selectByHsvColor(pendingColor.toArgb())
+                                }
+                                if (brightnessBar != null && brightnessBar.width > 0) {
+                                    brightnessBar.setSelectorPosition(colorToHsvValue(pendingColor))
+                                }
                             }
                         }
                     )
@@ -547,7 +575,14 @@ fun DrawingScreen(
                                 .setActionMode(ActionMode.LAST)
                                 .apply { lifecycleOwner?.let { setLifecycleOwner(it) } }
                                 .build()
-                            val brightnessBar = BrightnessSlideBar(it)
+                            val brightnessBar = BrightnessSlideBar(it).apply {
+                                val whiteLine = GradientDrawable().apply {
+                                    setColor(android.graphics.Color.WHITE)
+                                    setShape(GradientDrawable.RECTANGLE)
+                                    setSize((4 * density).toInt(), sliderHeightPx)
+                                }
+                                setSelectorDrawable(whiteLine)
+                            }
                             picker.attachBrightnessSlider(brightnessBar)
                             column.addView(picker, ViewGroup.LayoutParams(wheelSizePx, wheelSizePx))
                             column.addView(brightnessBar, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, sliderHeightPx))
@@ -555,10 +590,17 @@ fun DrawingScreen(
                         },
                         modifier = Modifier.size(280.dp, 320.dp),
                         update = { root ->
-                            val picker = (root as? ViewGroup)?.getChildAt(0) as? ColorPickerView
-                            if (picker != null && picker.width > 0 && picker.height > 0) {
-                                picker.setHsvPaletteDrawable()
-                                picker.selectByHsvColor(pendingBgColor.toArgb())
+                            val column = root as? ViewGroup
+                            if (column != null) {
+                                val picker = column.getChildAt(0) as? ColorPickerView
+                                val brightnessBar = column.getChildAt(1) as? BrightnessSlideBar
+                                if (picker != null && picker.width > 0 && picker.height > 0) {
+                                    picker.setHsvPaletteDrawable()
+                                    picker.selectByHsvColor(pendingBgColor.toArgb())
+                                }
+                                if (brightnessBar != null && brightnessBar.width > 0) {
+                                    brightnessBar.setSelectorPosition(colorToHsvValue(pendingBgColor))
+                                }
                             }
                         }
                     )
