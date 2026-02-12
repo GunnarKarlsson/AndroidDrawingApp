@@ -136,18 +136,31 @@ private fun StrokeCapToggleButton(
     val lineColor = MaterialTheme.colorScheme.onSurface
     Box(
         modifier = modifier
-            .size(40.dp)
-            .padding(4.dp)
+            .size(32.dp)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        // Show only the end of a line (thick): segment from off-screen left so one cap is visible
-        Canvas(Modifier.size(28.dp)) {
-            val lineWidth = 8.dp.toPx()
-            val centerY = size.height / 2f
+        // Circle (arc open at bottom) containing the line tip — same size as color picker circle
+        Canvas(Modifier.size(32.dp)) {
+            val arcStroke = 2.5.dp.toPx()
+            val lineWidth = 6.dp.toPx()
+            val inset = 2.dp.toPx()
+            val rect = androidx.compose.ui.geometry.Rect(inset, inset, size.width - inset, size.height - inset)
+            // Full circle (360°) except small gap at bottom: start at 100° (just after bottom) and sweep 340° to end at 80° (just before bottom)
+            // This draws: 100° → 180° (left) → 270° (top) → 360°/0° (right) → 80°, leaving only ~20° gap at bottom
+            drawArc(
+                color = lineColor,
+                topLeft = rect.topLeft,
+                size = rect.size,
+                startAngle = 100f,
+                sweepAngle = 340f,
+                useCenter = false,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = arcStroke)
+            )
+            val centerX = size.width / 2f
             val path = Path().apply {
-                moveTo(-lineWidth, centerY)
-                lineTo(size.width - 4.dp.toPx(), centerY)
+                moveTo(centerX, inset + lineWidth)
+                lineTo(centerX, size.height - inset)
             }
             drawPath(
                 path = path,
