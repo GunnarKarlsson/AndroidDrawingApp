@@ -11,11 +11,13 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +27,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -48,9 +51,9 @@ import androidx.compose.ui.unit.dp
 import com.example.drawingapp.data.DrawTool
 import com.example.drawingapp.data.Stroke
 
-private const val PEN_WIDTH = 4f
-private const val PENCIL_WIDTH = 2f
 private const val PENCIL_ALPHA = 0.75f
+private const val DEFAULT_STROKE_SIZE_PX = 4f
+private val STROKE_SIZE_RANGE = 1f..24f
 private val DEFAULT_COLOR = Color.Black
 
 private val COLOR_PALETTE = listOf(
@@ -79,13 +82,11 @@ fun DrawingScreen(
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var selectedTool by remember { mutableStateOf(DrawTool.Pen) }
     var selectedColor by remember { mutableStateOf(DEFAULT_COLOR) }
+    var strokeSizePx by remember { mutableStateOf(DEFAULT_STROKE_SIZE_PX) }
     var backgroundColor by remember(pageId) { mutableStateOf(0xFFFFFFFF.toInt()) }
     var initialized by remember(pageId) { mutableStateOf(false) }
 
-    val strokeWidth = when (selectedTool) {
-        DrawTool.Pen -> PEN_WIDTH
-        DrawTool.Pencil -> PENCIL_WIDTH
-    }
+    val strokeWidth = strokeSizePx
     val strokeColor = when (selectedTool) {
         DrawTool.Pen -> selectedColor
         DrawTool.Pencil -> selectedColor.copy(alpha = PENCIL_ALPHA)
@@ -198,7 +199,25 @@ fun DrawingScreen(
             )
         }
     ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                PreviewDot(strokeWidth = strokeWidth, strokeColor = strokeColor)
+                Slider(
+                    value = strokeSizePx,
+                    onValueChange = { strokeSizePx = it },
+                    valueRange = STROKE_SIZE_RANGE,
+                    steps = 22,
+                    modifier = Modifier.widthIn(min = 80.dp, max = 160.dp)
+                )
+            }
+            Box(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -232,7 +251,7 @@ fun DrawingScreen(
                             }
                         }
                     }
-                    .pointerInput(selectedTool, selectedColor, currentLayerIndex) {
+                    .pointerInput(selectedTool, selectedColor, currentLayerIndex, strokeWidth) {
                         detectDragGestures(
                             onDragStart = { currentStrokePoints = listOf(it) },
                             onDrag = { change, _ -> currentStrokePoints = currentStrokePoints + change.position },
@@ -302,6 +321,29 @@ fun DrawingScreen(
                 }
                 TextButton(onClick = { addLayer() }) { Text("+ Layer") }
             }
+        }
+        }
+    }
+}
+
+@Composable
+private fun PreviewDot(
+    strokeWidth: Float,
+    strokeColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(48.dp)
+            .background(MaterialTheme.colorScheme.surface, CircleShape)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawCircle(
+                color = strokeColor,
+                radius = strokeWidth / 2f,
+                center = center
+            )
         }
     }
 }
