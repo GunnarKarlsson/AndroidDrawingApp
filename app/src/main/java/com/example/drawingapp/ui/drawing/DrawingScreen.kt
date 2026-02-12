@@ -417,9 +417,17 @@ fun DrawingScreen(
                 if (layerStates.isNotEmpty()) {
                     Canvas(Modifier.fillMaxSize()) {
                         drawRect(Color(backgroundColor))
-                        layerStates.forEach { layer ->
-                            drawImage(layer.bitmap.asImageBitmap(), topLeft = Offset.Zero)
+                        // Draw layers below the current layer
+                        for (i in 0 until currentLayerIndex) {
+                            if (i in layerStates.indices) {
+                                drawImage(layerStates[i].bitmap.asImageBitmap(), topLeft = Offset.Zero)
+                            }
                         }
+                        // Draw the current layer bitmap (existing strokes on this layer)
+                        if (currentLayerIndex in layerStates.indices) {
+                            drawImage(layerStates[currentLayerIndex].bitmap.asImageBitmap(), topLeft = Offset.Zero)
+                        }
+                        // Draw current stroke preview (if drawing) - appears above current layer but below layers above
                         if (currentStrokePoints.isNotEmpty()) {
                             val path = Path().apply {
                                 currentStrokePoints.forEachIndexed { i, o ->
@@ -435,6 +443,10 @@ fun DrawingScreen(
                                     join = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeJoin.Round else StrokeJoin.Bevel
                                 )
                             )
+                        }
+                        // Draw layers above the current layer
+                        for (i in (currentLayerIndex + 1) until layerStates.size) {
+                            drawImage(layerStates[i].bitmap.asImageBitmap(), topLeft = Offset.Zero)
                         }
                     }
                 }
