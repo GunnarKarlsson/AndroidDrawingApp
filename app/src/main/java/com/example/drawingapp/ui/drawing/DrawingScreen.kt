@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,11 +22,22 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -206,6 +218,7 @@ fun DrawingScreen(
     var initialized by remember(pageId) { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var exportBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var showLayerManagerDialog by remember { mutableStateOf(false) }
 
     val strokeWidth = strokeSizePx
     val strokeColor = when (selectedTool) {
@@ -311,6 +324,7 @@ fun DrawingScreen(
                                 }
                         )
                         TextButton(onClick = { undo() }) { Text("Undo") }
+                        TextButton(onClick = { showLayerManagerDialog = true }) { Text("Layers") }
                         TextButton(onClick = {
                             compositeLayers()?.let { bmp ->
                                 exportBitmap = bmp
@@ -424,33 +438,6 @@ fun DrawingScreen(
                         }
                     }
                 }
-            }
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f))
-                    .horizontalScroll(rememberScrollState())
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                layerStates.forEachIndexed { index, _ ->
-                    val selected = index == currentLayerIndex
-                    TextButton(
-                        onClick = { currentLayerIndex = index },
-                        modifier = Modifier.background(
-                            if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                            RoundedCornerShape(8.dp)
-                        )
-                    ) {
-                        Text("Layer ${index + 1}")
-                    }
-                    if (layerStates.size > 1) {
-                        TextButton(onClick = { deleteLayer(index) }) { Text("×", style = MaterialTheme.typography.titleMedium) }
-                    }
-                }
-                TextButton(onClick = { addLayer() }) { Text("+ Layer") }
             }
         }
         }
@@ -599,6 +586,17 @@ fun DrawingScreen(
         )
     }
 
+    if (showLayerManagerDialog) {
+        LayerManagerDialog(
+            layerStates = layerStates,
+            currentLayerIndex = currentLayerIndex,
+            onLayerSelected = { index -> currentLayerIndex = index },
+            onAddLayer = { addLayer() },
+            onDismiss = { showLayerManagerDialog = false },
+            backgroundColor = backgroundColor
+        )
+    }
+    
     if (showBgColorPickerModal) {
         val context = LocalContext.current
         val lifecycleOwner = (context as? Activity) as? LifecycleOwner
@@ -742,4 +740,111 @@ private fun drawStrokeOnBitmap(bitmap: Bitmap?, stroke: Stroke) {
         else path.lineTo(offset.x, offset.y)
     }
     canvas.drawPath(path, paint)
+}
+
+private fun generateLayerThumbnail(bitmap: Bitmap, size: Int = 80): Bitmap {
+    if (bitmap.width <= 0 || bitmap.height <= 0) {
+        return Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    }
+    val scale = size.toFloat() / maxOf(bitmap.width, bitmap.height).coerceAtLeast(1)
+    val scaledWidth = (bitmap.width * scale).toInt().coerceAtLeast(1)
+    val scaledHeight = (bitmap.height * scale).toInt().coerceAtLeast(1)
+    return Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true)
+}
+
+@Composable
+private fun LayerManagerDialog(
+    layerStates: List<LayerState>,
+    currentLayerIndex: Int,
+    onLayerSelected: (Int) -> Unit,
+    onAddLayer: () -> Unit,
+    onDismiss: () -> Unit,
+    backgroundColor: Int
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Layers") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(400.dp)
+            ) {
+                // Add Layer button at top
+                TextButton(
+                    onClick = {
+                        onAddLayer()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Layer")
+                    Text("Add Layer", modifier = Modifier.padding(start = 8.dp))
+                }
+                
+                // Layer list (newest first)
+                val reversedLayersWithIndices = layerStates.mapIndexed { index, layer -> index to layer }.reversed()
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(
+                        items = reversedLayersWithIndices,
+                        key = { it.first }
+                    ) { (originalIndex, layer) ->
+                        val isSelected = originalIndex == currentLayerIndex
+                        
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .clickable { onLayerSelected(originalIndex) }
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Check icon/checkbox
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = "Selected",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            } else {
+                                Box(modifier = Modifier.size(24.dp))
+                            }
+                            
+                            // Thumbnail preview
+                            val thumbnail = remember(originalIndex, layer.bitmap) {
+                                generateLayerThumbnail(layer.bitmap, 64)
+                            }
+                            Image(
+                                bitmap = thumbnail.asImageBitmap(),
+                                contentDescription = "Layer ${originalIndex + 1} preview",
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .background(
+                                        Color(backgroundColor),
+                                        RoundedCornerShape(4.dp)
+                                    ),
+                                contentScale = ContentScale.Fit
+                            )
+                            
+                            // Layer label
+                            Text(
+                                text = "Layer ${originalIndex + 1}",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
 }
