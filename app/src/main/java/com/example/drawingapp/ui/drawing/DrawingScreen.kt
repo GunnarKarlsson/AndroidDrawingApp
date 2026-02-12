@@ -490,16 +490,19 @@ fun DrawingScreen(
                         },
                         modifier = Modifier.size(280.dp, 320.dp),
                         update = { root ->
+                            val color = pendingColor
                             val column = root as? ViewGroup
                             if (column != null) {
                                 val picker = column.getChildAt(0) as? ColorPickerView
                                 val brightnessBar = column.getChildAt(1) as? BrightnessSlideBar
-                                if (picker != null && picker.width > 0 && picker.height > 0) {
-                                    picker.setHsvPaletteDrawable()
-                                    picker.selectByHsvColor(pendingColor.toArgb())
-                                }
-                                if (brightnessBar != null && brightnessBar.width > 0) {
-                                    brightnessBar.setSelectorPosition(colorToHsvValue(pendingColor))
+                                root.post {
+                                    if (picker != null && picker.width > 0 && picker.height > 0) {
+                                        picker.setHsvPaletteDrawable()
+                                        picker.selectByHsvColor(color.toArgb())
+                                    }
+                                    if (brightnessBar != null && brightnessBar.width > 0) {
+                                        brightnessBar.setSelectorPosition(colorToHsvValue(color))
+                                    }
                                 }
                             }
                         }
@@ -590,16 +593,19 @@ fun DrawingScreen(
                         },
                         modifier = Modifier.size(280.dp, 320.dp),
                         update = { root ->
+                            val color = pendingBgColor
                             val column = root as? ViewGroup
                             if (column != null) {
                                 val picker = column.getChildAt(0) as? ColorPickerView
                                 val brightnessBar = column.getChildAt(1) as? BrightnessSlideBar
-                                if (picker != null && picker.width > 0 && picker.height > 0) {
-                                    picker.setHsvPaletteDrawable()
-                                    picker.selectByHsvColor(pendingBgColor.toArgb())
-                                }
-                                if (brightnessBar != null && brightnessBar.width > 0) {
-                                    brightnessBar.setSelectorPosition(colorToHsvValue(pendingBgColor))
+                                root.post {
+                                    if (picker != null && picker.width > 0 && picker.height > 0) {
+                                        picker.setHsvPaletteDrawable()
+                                        picker.selectByHsvColor(color.toArgb())
+                                    }
+                                    if (brightnessBar != null && brightnessBar.width > 0) {
+                                        brightnessBar.setSelectorPosition(colorToHsvValue(color))
+                                    }
                                 }
                             }
                         }
