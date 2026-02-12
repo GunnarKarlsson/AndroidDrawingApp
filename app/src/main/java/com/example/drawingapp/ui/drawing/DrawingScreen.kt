@@ -1,9 +1,11 @@
 package com.example.drawingapp.ui.drawing
 
+import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.Rect
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.LifecycleOwner
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -43,12 +45,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.skydoves.colorpickerview.ActionMode
+import com.skydoves.colorpickerview.ColorPickerView
+import com.skydoves.colorpickerview.listeners.ColorEnvelopeListener
 import com.example.drawingapp.data.DrawTool
 import com.example.drawingapp.data.Stroke
 import com.example.drawingapp.util.getExportDirectoryPath
@@ -59,8 +69,35 @@ private val STROKE_SIZE_RANGE = 1f..64f
 private const val DEFAULT_STROKE_SIZE_PX = 20f // ~30% into 1..64
 private val DEFAULT_COLOR = Color.Black
 
-private val COLOR_PALETTE = listOf(
-    Color.Black,
+private fun colorFromHsv(hue: Float, saturation: Float, value: Float): Color {
+    val h = hue.coerceIn(0f, 360f) / 60f
+    val s = saturation.coerceIn(0f, 1f)
+    val v = value.coerceIn(0f, 1f)
+    val c = v * s
+    val x = c * (1 - abs(h % 2f - 1f))
+    val m = v - c
+    val (r, g, b) = when {
+        h < 1 -> Triple(c, x, 0f)
+        h < 2 -> Triple(x, c, 0f)
+        h < 3 -> Triple(0f, c, x)
+        h < 4 -> Triple(0f, x, c)
+        h < 5 -> Triple(x, 0f, c)
+        else -> Triple(c, 0f, x)
+    }
+    return Color(
+        red = (r + m).coerceIn(0f, 1f),
+        green = (g + m).coerceIn(0f, 1f),
+        blue = (b + m).coerceIn(0f, 1f),
+        alpha = 1f
+    )
+}
+
+private val DESATURATED_PRESETS = listOf(0f, 30f, 60f, 90f, 120f, 150f, 180f, 210f, 240f, 270f, 300f, 330f).map { hue ->
+    colorFromHsv(hue, 0.55f, 0.9f)
+}
+
+private val BG_COLOR_PALETTE = listOf(
+    Color.White,
     Color(0xFFE53935),
     Color(0xFF43A047),
     Color(0xFF1E88E5),
@@ -79,6 +116,8 @@ fun DrawingScreen(
     onExport: (Bitmap) -> Unit,
     initialStrokeSizePx: Float = DEFAULT_STROKE_SIZE_PX,
     onSaveStrokeSizePx: (Float) -> Unit = {},
+    initialStrokeColor: Color = DEFAULT_COLOR,
+    onConfirmStrokeColor: (Color) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val layerStates = remember(pageId) { mutableStateListOf<LayerState>() }
@@ -86,7 +125,9 @@ fun DrawingScreen(
     var currentStrokePoints by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var selectedTool by remember { mutableStateOf(DrawTool.Pen) }
-    var selectedColor by remember { mutableStateOf(DEFAULT_COLOR) }
+    var selectedColor by remember(initialStrokeColor) { mutableStateOf(initialStrokeColor) }
+    var showColorPickerModal by remember { mutableStateOf(false) }
+    var pendingColor by remember { mutableStateOf(selectedColor) }
     var strokeSizePx by remember(initialStrokeSizePx) {
         mutableStateOf(initialStrokeSizePx.coerceIn(STROKE_SIZE_RANGE))
     }
@@ -170,27 +211,18 @@ fun DrawingScreen(
                                 label = { Text("Pencil") }
                             )
                         }
-                        Row(
-                            modifier = Modifier.padding(horizontal = 0.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            COLOR_PALETTE.forEach { color ->
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .background(color, CircleShape)
-                                        .border(
-                                            width = if (color == selectedColor) 2.dp else 0.dp,
-                                            color = MaterialTheme.colorScheme.outline,
-                                            shape = CircleShape
-                                        )
-                                        .clickable { selectedColor = color }
-                                )
-                            }
-                        }
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(selectedColor, CircleShape)
+                                .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                .clickable {
+                                    pendingColor = selectedColor
+                                    showColorPickerModal = true
+                                }
+                        )
                         Text("Bg:", modifier = Modifier.padding(horizontal = 4.dp))
-                        COLOR_PALETTE.forEach { color ->
+                        BG_COLOR_PALETTE.forEach { color ->
                             val isBg = color.toArgb() == backgroundColor
                             Box(
                                 modifier = Modifier
@@ -385,6 +417,79 @@ fun DrawingScreen(
                     showExportDialog = false
                     exportBitmap = null
                 }) { Text("Cancel") }
+            }
+        )
+    }
+    if (showColorPickerModal) {
+        val context = LocalContext.current
+        val lifecycleOwner = (context as? Activity) as? LifecycleOwner
+        AlertDialog(
+            onDismissRequest = { showColorPickerModal = false },
+            title = { Text("Stroke color") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("Presets", style = MaterialTheme.typography.titleSmall)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        DESATURATED_PRESETS.forEach { color ->
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(color, CircleShape)
+                                    .border(
+                                        2.dp,
+                                        if (color.toArgb() == pendingColor.toArgb()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                        CircleShape
+                                    )
+                                    .clickable { pendingColor = color }
+                            )
+                        }
+                    }
+                    AndroidView(
+                        factory = {
+                            ColorPickerView.Builder(it)
+                                .setInitialColor(pendingColor.toArgb())
+                                .setColorListener(ColorEnvelopeListener { envelope, _ ->
+                                    pendingColor = Color(envelope.getColor())
+                                })
+                                .setActionMode(ActionMode.LAST)
+                                .apply { lifecycleOwner?.let { setLifecycleOwner(it) } }
+                                .build()
+                        },
+                        modifier = Modifier.size(280.dp),
+                        update = { view ->
+                            if (view.width > 0 && view.height > 0) {
+                                view.setHsvPaletteDrawable()
+                                view.selectByHsvColor(pendingColor.toArgb())
+                            }
+                        }
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) {
+                        Text("Selection", style = MaterialTheme.typography.titleSmall)
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(pendingColor, CircleShape)
+                                .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    selectedColor = pendingColor
+                    onConfirmStrokeColor(pendingColor)
+                    showColorPickerModal = false
+                }) { Text("Confirm") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showColorPickerModal = false }) { Text("Cancel") }
             }
         )
     }

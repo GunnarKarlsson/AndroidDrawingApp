@@ -10,6 +10,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -93,7 +95,9 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 initialStrokeSizePx = remember { repo.loadStrokeSizePx(defaultStrokeSize) },
-                                onSaveStrokeSizePx = { repo.saveStrokeSizePx(it) }
+                                onSaveStrokeSizePx = { repo.saveStrokeSizePx(it) },
+                                initialStrokeColor = Color(remember { repo.loadStrokeColorArgb(Color.Black.toArgb()) }),
+                                onConfirmStrokeColor = { repo.saveStrokeColorArgb(it.toArgb()) }
                             )
                         }
                     }

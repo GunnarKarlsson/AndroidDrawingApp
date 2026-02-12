@@ -46,4 +46,10 @@ class PageRepository(private val store: LocalPageStore) {
     fun saveStrokeSizePx(value: Float) {
         store.saveStrokeSizePx(value)
     }
+
+    fun loadStrokeColorArgb(defaultValue: Int): Int = store.loadStrokeColorArgb(defaultValue)
+
+    fun saveStrokeColorArgb(value: Int) {
+        store.saveStrokeColorArgb(value)
+    }
 }
