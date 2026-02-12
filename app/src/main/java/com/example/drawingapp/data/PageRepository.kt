@@ -52,4 +52,10 @@ class PageRepository(private val store: LocalPageStore) {
     fun saveStrokeColorArgb(value: Int) {
         store.saveStrokeColorArgb(value)
     }
+
+    fun loadStrokeCap(defaultValue: Int = 0): Int = store.loadStrokeCap(defaultValue)
+
+    fun saveStrokeCap(value: Int) {
+        store.saveStrokeCap(value)
+    }
 }

@@ -14,6 +14,7 @@ private const val PREFS_NAME = "drawing_app"
 private const val KEY_PAGE_IDS = "page_ids"
 private const val KEY_STROKE_SIZE_PX = "stroke_size_px"
 private const val KEY_STROKE_COLOR_ARGB = "stroke_color_argb"
+private const val KEY_STROKE_CAP = "stroke_cap" // 0 = ROUND, 1 = BUTT
 private const val PAGES_DIR = "pages"
 private const val META_FILE = "meta.json"
 
@@ -42,6 +43,13 @@ class LocalPageStore(context: Context) {
 
     fun saveStrokeColorArgb(value: Int) {
         prefs.edit().putInt(KEY_STROKE_COLOR_ARGB, value).apply()
+    }
+
+    fun loadStrokeCap(roundDefault: Int = 0): Int =
+        prefs.getInt(KEY_STROKE_CAP, roundDefault)
+
+    fun saveStrokeCap(value: Int) {
+        prefs.edit().putInt(KEY_STROKE_CAP, value).apply()
     }
 
     /** Legacy: load single bitmap (first layer or old pageId.png). */

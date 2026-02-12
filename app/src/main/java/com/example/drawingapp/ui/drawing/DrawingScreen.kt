@@ -45,9 +45,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -65,6 +67,7 @@ import com.skydoves.colorpickerview.listeners.ColorEnvelopeListener
 import com.skydoves.colorpickerview.sliders.BrightnessSlideBar
 import com.example.drawingapp.data.DrawTool
 import com.example.drawingapp.data.Stroke
+import com.example.drawingapp.data.StrokeCapStyle
 import com.example.drawingapp.util.getExportDirectoryPath
 import java.io.ByteArrayOutputStream
 
@@ -122,6 +125,44 @@ private val BG_COLOR_PALETTE = listOf(
     Color(0xFF8E24AA)
 )
 
+@Composable
+private fun StrokeCapButton(
+    cap: StrokeCapStyle,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val strokeCap = if (cap == StrokeCapStyle.ROUND) StrokeCap.Round else StrokeCap.Butt
+    val lineColor = MaterialTheme.colorScheme.onSurface
+    Box(
+        modifier = modifier
+            .size(40.dp)
+            .padding(4.dp)
+            .then(
+                if (selected) Modifier.background(
+                    MaterialTheme.colorScheme.primaryContainer,
+                    RoundedCornerShape(8.dp)
+                ) else Modifier
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(Modifier.size(24.dp)) {
+            val lineWidth = 3.dp.toPx()
+            val half = size.minDimension / 2f
+            val path = Path().apply {
+                moveTo(half, 2.dp.toPx())
+                lineTo(half, size.maxDimension - 2.dp.toPx())
+            }
+            drawPath(
+                path = path,
+                color = lineColor,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = lineWidth, cap = strokeCap)
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DrawingScreen(
@@ -135,6 +176,8 @@ fun DrawingScreen(
     onSaveStrokeSizePx: (Float) -> Unit = {},
     initialStrokeColor: Color = DEFAULT_COLOR,
     onConfirmStrokeColor: (Color) -> Unit = {},
+    initialStrokeCap: StrokeCapStyle = StrokeCapStyle.ROUND,
+    onSaveStrokeCap: (StrokeCapStyle) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val layerStates = remember(pageId) { mutableStateListOf<LayerState>() }
@@ -148,6 +191,7 @@ fun DrawingScreen(
     var strokeSizePx by remember(initialStrokeSizePx) {
         mutableStateOf(initialStrokeSizePx.coerceIn(STROKE_SIZE_RANGE))
     }
+    var strokeCapStyle by remember(initialStrokeCap) { mutableStateOf(initialStrokeCap) }
     var backgroundColor by remember(pageId) { mutableStateOf(0xFFFFFFFF.toInt()) }
     var showBgColorPickerModal by remember { mutableStateOf(false) }
     var pendingBgColor by remember { mutableStateOf(Color(backgroundColor)) }
@@ -230,6 +274,22 @@ fun DrawingScreen(
                                 label = { Text("Pencil") }
                             )
                         }
+                        StrokeCapButton(
+                            cap = StrokeCapStyle.ROUND,
+                            selected = strokeCapStyle == StrokeCapStyle.ROUND,
+                            onClick = {
+                                strokeCapStyle = StrokeCapStyle.ROUND
+                                onSaveStrokeCap(StrokeCapStyle.ROUND)
+                            }
+                        )
+                        StrokeCapButton(
+                            cap = StrokeCapStyle.BUTT,
+                            selected = strokeCapStyle == StrokeCapStyle.BUTT,
+                            onClick = {
+                                strokeCapStyle = StrokeCapStyle.BUTT
+                                onSaveStrokeCap(StrokeCapStyle.BUTT)
+                            }
+                        )
                         Box(
                             modifier = Modifier
                                 .size(32.dp)
@@ -324,11 +384,12 @@ fun DrawingScreen(
                             onDrag = { change, _ -> currentStrokePoints = currentStrokePoints + change.position },
                             onDragEnd = {
                                 if (currentLayerIndex in layerStates.indices && currentStrokePoints.size > 1) {
-                                    val stroke = Stroke(
+                                    val                                     stroke = Stroke(
                                         points = currentStrokePoints,
                                         color = strokeColor,
                                         strokeWidth = strokeWidth,
-                                        tool = selectedTool
+                                        tool = selectedTool,
+                                        strokeCapStyle = strokeCapStyle
                                     )
                                     val layer = layerStates[currentLayerIndex]
                                     layer.strokes.add(stroke)
@@ -355,7 +416,10 @@ fun DrawingScreen(
                             drawPath(
                                 path = path,
                                 color = strokeColor,
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                    width = strokeWidth,
+                                    cap = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeCap.Round else StrokeCap.Butt
+                                )
                             )
                         }
                     }
@@ -670,7 +734,7 @@ private fun drawStrokeOnBitmap(bitmap: Bitmap?, stroke: Stroke) {
         strokeWidth = stroke.strokeWidth
         isAntiAlias = true
         strokeJoin = Paint.Join.ROUND
-        strokeCap = Paint.Cap.ROUND
+        strokeCap = if (stroke.strokeCapStyle == StrokeCapStyle.ROUND) Paint.Cap.ROUND else Paint.Cap.BUTT
     }
     val path = android.graphics.Path()
     stroke.points.forEachIndexed { index, offset ->

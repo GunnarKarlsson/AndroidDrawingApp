@@ -21,6 +21,7 @@ import androidx.navigation.navArgument
 import com.example.drawingapp.data.LocalPageStore
 import com.example.drawingapp.data.Page
 import com.example.drawingapp.data.PageRepository
+import com.example.drawingapp.data.StrokeCapStyle
 import com.example.drawingapp.data.S3BackupRepository
 import com.example.drawingapp.ui.drawing.DrawingScreen
 import com.example.drawingapp.util.exportDrawingAsPng
@@ -97,7 +98,9 @@ class MainActivity : ComponentActivity() {
                                 initialStrokeSizePx = remember { repo.loadStrokeSizePx(defaultStrokeSize) },
                                 onSaveStrokeSizePx = { repo.saveStrokeSizePx(it) },
                                 initialStrokeColor = Color(remember { repo.loadStrokeColorArgb(Color.Black.toArgb()) }),
-                                onConfirmStrokeColor = { repo.saveStrokeColorArgb(it.toArgb()) }
+                                onConfirmStrokeColor = { repo.saveStrokeColorArgb(it.toArgb()) },
+                                initialStrokeCap = if (remember { repo.loadStrokeCap(0) } == 0) StrokeCapStyle.ROUND else StrokeCapStyle.BUTT,
+                                onSaveStrokeCap = { repo.saveStrokeCap(if (it == StrokeCapStyle.ROUND) 0 else 1) }
                             )
                         }
                     }
