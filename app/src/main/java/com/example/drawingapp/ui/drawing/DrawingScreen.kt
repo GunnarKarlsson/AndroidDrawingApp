@@ -132,6 +132,8 @@ fun DrawingScreen(
         mutableStateOf(initialStrokeSizePx.coerceIn(STROKE_SIZE_RANGE))
     }
     var backgroundColor by remember(pageId) { mutableStateOf(0xFFFFFFFF.toInt()) }
+    var showBgColorPickerModal by remember { mutableStateOf(false) }
+    var pendingBgColor by remember { mutableStateOf(Color(backgroundColor)) }
     var initialized by remember(pageId) { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var exportBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -221,24 +223,17 @@ fun DrawingScreen(
                                     showColorPickerModal = true
                                 }
                         )
-                        Text("Bg:", modifier = Modifier.padding(horizontal = 4.dp))
-                        BG_COLOR_PALETTE.forEach { color ->
-                            val isBg = color.toArgb() == backgroundColor
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .background(color, CircleShape)
-                                    .border(
-                                        width = if (isBg) 2.dp else 0.dp,
-                                        color = MaterialTheme.colorScheme.outline,
-                                        shape = CircleShape
-                                    )
-                                    .clickable {
-                                        backgroundColor = color.toArgb()
-                                        onSaveBackgroundColor(pageId, color.toArgb())
-                                    }
-                            )
-                        }
+                        Text("Bg", modifier = Modifier.padding(horizontal = 4.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(Color(backgroundColor), CircleShape)
+                                .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                .clickable {
+                                    pendingBgColor = Color(backgroundColor)
+                                    showBgColorPickerModal = true
+                                }
+                        )
                         TextButton(onClick = { undo() }) { Text("Undo") }
                         TextButton(onClick = {
                             compositeLayers()?.let { bmp ->
@@ -490,6 +485,80 @@ fun DrawingScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showColorPickerModal = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showBgColorPickerModal) {
+        val context = LocalContext.current
+        val lifecycleOwner = (context as? Activity) as? LifecycleOwner
+        AlertDialog(
+            onDismissRequest = { showBgColorPickerModal = false },
+            title = { Text("Background color") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("Presets", style = MaterialTheme.typography.titleSmall)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        BG_COLOR_PALETTE.forEach { color ->
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(color, CircleShape)
+                                    .border(
+                                        2.dp,
+                                        if (color.toArgb() == pendingBgColor.toArgb()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                        CircleShape
+                                    )
+                                    .clickable { pendingBgColor = color }
+                            )
+                        }
+                    }
+                    AndroidView(
+                        factory = {
+                            ColorPickerView.Builder(it)
+                                .setInitialColor(pendingBgColor.toArgb())
+                                .setColorListener(ColorEnvelopeListener { envelope, _ ->
+                                    pendingBgColor = Color(envelope.getColor())
+                                })
+                                .setActionMode(ActionMode.LAST)
+                                .apply { lifecycleOwner?.let { setLifecycleOwner(it) } }
+                                .build()
+                        },
+                        modifier = Modifier.size(280.dp),
+                        update = { view ->
+                            if (view.width > 0 && view.height > 0) {
+                                view.setHsvPaletteDrawable()
+                                view.selectByHsvColor(pendingBgColor.toArgb())
+                            }
+                        }
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) {
+                        Text("Selection", style = MaterialTheme.typography.titleSmall)
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(pendingBgColor, CircleShape)
+                                .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    backgroundColor = pendingBgColor.toArgb()
+                    onSaveBackgroundColor(pageId, backgroundColor)
+                    showBgColorPickerModal = false
+                }) { Text("Confirm") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBgColorPickerModal = false }) { Text("Cancel") }
             }
         )
     }
