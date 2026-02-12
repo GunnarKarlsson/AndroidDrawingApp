@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -764,6 +765,50 @@ private fun generateLayerThumbnail(bitmap: Bitmap, size: Int = 80): Bitmap {
     return Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true)
 }
 
+private fun hasTransparency(bitmap: Bitmap): Boolean {
+    if (!bitmap.hasAlpha()) return false
+    // Sample pixels to check for transparency
+    // Check corners and center to avoid checking every pixel
+    val samplePoints = listOf(
+        0 to 0,
+        bitmap.width - 1 to 0,
+        0 to bitmap.height - 1,
+        bitmap.width - 1 to bitmap.height - 1,
+        bitmap.width / 2 to bitmap.height / 2
+    )
+    return samplePoints.any { (x, y) ->
+        if (x < 0 || x >= bitmap.width || y < 0 || y >= bitmap.height) return@any false
+        val pixel = bitmap.getPixel(x, y)
+        android.graphics.Color.alpha(pixel) < 255
+    }
+}
+
+@Composable
+private fun TransparencyCheckerboard(
+    modifier: Modifier = Modifier,
+    squareSize: Int = 8
+) {
+    Canvas(modifier = modifier) {
+        val squareSizePx = squareSize.dp.toPx()
+        val lightGray = Color(0xFFE0E0E0)
+        val white = Color.White
+        
+        val horizontalSquares = (size.width / squareSizePx).toInt() + 1
+        val verticalSquares = (size.height / squareSizePx).toInt() + 1
+        
+        for (y in 0 until verticalSquares) {
+            for (x in 0 until horizontalSquares) {
+                val color = if ((x + y) % 2 == 0) white else lightGray
+                drawRect(
+                    color = color,
+                    topLeft = Offset(x * squareSizePx, y * squareSizePx),
+                    size = androidx.compose.ui.geometry.Size(squareSizePx, squareSizePx)
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun LayerManagerDialog(
     layerStates: List<LayerState>,
@@ -833,17 +878,40 @@ private fun LayerManagerDialog(
                             val thumbnail = remember(originalIndex, layer.bitmap) {
                                 generateLayerThumbnail(layer.bitmap, 64)
                             }
-                            Image(
-                                bitmap = thumbnail.asImageBitmap(),
-                                contentDescription = "Layer ${originalIndex + 1} preview",
+                            // First layer (index 0) always uses background color, layers 1+ check for transparency
+                            val isFirstLayer = originalIndex == 0
+                            val hasTransparentBg = remember(originalIndex, layer.bitmap) {
+                                !isFirstLayer && hasTransparency(layer.bitmap)
+                            }
+                            val bgColor = if (isFirstLayer) {
+                                // Use background color for first layer, default to white if invalid
+                                if (backgroundColor != 0) Color(backgroundColor) else Color.White
+                            } else {
+                                // For other layers, use transparent if layer has transparency
+                                if (hasTransparentBg) Color.Transparent else Color(backgroundColor)
+                            }
+                            Box(
                                 modifier = Modifier
                                     .size(64.dp)
                                     .background(
-                                        Color(backgroundColor),
+                                        bgColor,
                                         RoundedCornerShape(4.dp)
-                                    ),
-                                contentScale = ContentScale.Fit
-                            )
+                                    )
+                            ) {
+                                if (hasTransparentBg) {
+                                    TransparencyCheckerboard(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(RoundedCornerShape(4.dp))
+                                    )
+                                }
+                                Image(
+                                    bitmap = thumbnail.asImageBitmap(),
+                                    contentDescription = "Layer ${originalIndex + 1} preview",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
                             
                             // Layer label
                             Text(
