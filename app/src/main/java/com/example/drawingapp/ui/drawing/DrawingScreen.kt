@@ -145,59 +145,65 @@ fun DrawingScreen(
             TopAppBar(
                 title = { Text("Drawing") },
                 actions = {
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.padding(horizontal = 8.dp)) {
-                        SegmentedButton(
-                            selected = selectedTool == DrawTool.Pen,
-                            onClick = { selectedTool = DrawTool.Pen },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                            label = { Text("Pen") }
-                        )
-                        SegmentedButton(
-                            selected = selectedTool == DrawTool.Pencil,
-                            onClick = { selectedTool = DrawTool.Pencil },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                            label = { Text("Pencil") }
-                        )
-                    }
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.padding(horizontal = 0.dp)) {
+                            SegmentedButton(
+                                selected = selectedTool == DrawTool.Pen,
+                                onClick = { selectedTool = DrawTool.Pen },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                                label = { Text("Pen") }
+                            )
+                            SegmentedButton(
+                                selected = selectedTool == DrawTool.Pencil,
+                                onClick = { selectedTool = DrawTool.Pencil },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                                label = { Text("Pencil") }
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.padding(horizontal = 0.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            COLOR_PALETTE.forEach { color ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .background(color, CircleShape)
+                                        .border(
+                                            width = if (color == selectedColor) 2.dp else 0.dp,
+                                            color = MaterialTheme.colorScheme.outline,
+                                            shape = CircleShape
+                                        )
+                                        .clickable { selectedColor = color }
+                                )
+                            }
+                        }
+                        Text("Bg:", modifier = Modifier.padding(horizontal = 4.dp))
                         COLOR_PALETTE.forEach { color ->
+                            val isBg = color.toArgb() == backgroundColor
                             Box(
                                 modifier = Modifier
-                                    .size(28.dp)
+                                    .size(24.dp)
                                     .background(color, CircleShape)
                                     .border(
-                                        width = if (color == selectedColor) 2.dp else 0.dp,
+                                        width = if (isBg) 2.dp else 0.dp,
                                         color = MaterialTheme.colorScheme.outline,
                                         shape = CircleShape
                                     )
-                                    .clickable { selectedColor = color }
+                                    .clickable {
+                                        backgroundColor = color.toArgb()
+                                        onSaveBackgroundColor(pageId, color.toArgb())
+                                    }
                             )
                         }
+                        TextButton(onClick = { undo() }) { Text("Undo") }
+                        TextButton(onClick = { compositeLayers()?.let { onExport(it) } }) { Text("Export") }
                     }
-                    Text("Bg:", modifier = Modifier.padding(horizontal = 4.dp))
-                    COLOR_PALETTE.forEach { color ->
-                        val isBg = color.toArgb() == backgroundColor
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .background(color, CircleShape)
-                                .border(
-                                    width = if (isBg) 2.dp else 0.dp,
-                                    color = MaterialTheme.colorScheme.outline,
-                                    shape = CircleShape
-                                )
-                                .clickable {
-                                    backgroundColor = color.toArgb()
-                                    onSaveBackgroundColor(pageId, color.toArgb())
-                                }
-                        )
-                    }
-                    TextButton(onClick = { undo() }) { Text("Undo") }
-                    TextButton(onClick = { compositeLayers()?.let { onExport(it) } }) { Text("Export") }
                 }
             )
         }
