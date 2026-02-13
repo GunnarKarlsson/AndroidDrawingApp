@@ -107,7 +107,7 @@ private val HEADER_ICON_SIZE = 29.dp // 20% larger than default 24.dp
 
 /** Represents one undoable action for the unified undo stack. */
 private sealed class UndoEntry {
-    data class Stroke(val layerIndex: Int) : UndoEntry()
+    data class Stroke(val layerIndex: Int, val stroke: com.example.drawingapp.data.Stroke? = null) : UndoEntry()
     data class Fill(val layerIndex: Int, val bitmapBeforeFill: Bitmap) : UndoEntry()
 }
 
@@ -212,6 +212,7 @@ fun DrawingScreen(
     var showToolSelectionModal by remember { mutableStateOf(false) }
     var canvasRefreshTrigger by remember { mutableStateOf(0) }
     val undoStack = remember(pageId) { mutableStateListOf<UndoEntry>() }
+    val redoStack = remember(pageId) { mutableStateListOf<UndoEntry>() }
 
     val strokeWidth = strokeSizePx
     val strokeColor = when (selectedTool) {
@@ -239,13 +240,50 @@ fun DrawingScreen(
                 if (entry.layerIndex !in layerStates.indices) return
                 val layer = layerStates[entry.layerIndex]
                 if (layer.strokes.isEmpty()) return
-                layer.strokes.removeAt(layer.strokes.lastIndex)
+                val removedStroke = layer.strokes.removeAt(layer.strokes.lastIndex)
                 layer.bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
                 layer.strokes.forEach { stroke -> drawStrokeOnBitmap(layer.bitmap, stroke) }
+                // Add to redo stack with the removed stroke
+                redoStack.add(UndoEntry.Stroke(entry.layerIndex, removedStroke))
             }
             is UndoEntry.Fill -> {
                 if (entry.layerIndex in layerStates.indices) {
-                    layerStates[entry.layerIndex].bitmap = entry.bitmapBeforeFill
+                    val layer = layerStates[entry.layerIndex]
+                    val currentBitmap = Bitmap.createBitmap(layer.bitmap.width, layer.bitmap.height, Bitmap.Config.ARGB_8888)
+                    android.graphics.Canvas(currentBitmap).drawBitmap(layer.bitmap, 0f, 0f, null)
+                    layer.bitmap = entry.bitmapBeforeFill
+                    // Add to redo stack with the current state before fill
+                    redoStack.add(UndoEntry.Fill(entry.layerIndex, currentBitmap))
+                }
+            }
+        }
+        saveAllLayers()
+        canvasRefreshTrigger++
+    }
+    
+    fun redo() {
+        if (redoStack.isEmpty()) return
+        val entry = redoStack.removeAt(redoStack.lastIndex)
+        when (entry) {
+            is UndoEntry.Stroke -> {
+                if (entry.layerIndex !in layerStates.indices) return
+                val layer = layerStates[entry.layerIndex]
+                val strokeToRestore = entry.stroke
+                if (strokeToRestore != null) {
+                    layer.strokes.add(strokeToRestore)
+                    drawStrokeOnBitmap(layer.bitmap, strokeToRestore)
+                    // Add back to undo stack (without stroke data, since undo will remove it)
+                    undoStack.add(UndoEntry.Stroke(entry.layerIndex))
+                }
+            }
+            is UndoEntry.Fill -> {
+                if (entry.layerIndex in layerStates.indices) {
+                    val layer = layerStates[entry.layerIndex]
+                    val currentBitmap = Bitmap.createBitmap(layer.bitmap.width, layer.bitmap.height, Bitmap.Config.ARGB_8888)
+                    android.graphics.Canvas(currentBitmap).drawBitmap(layer.bitmap, 0f, 0f, null)
+                    layer.bitmap = entry.bitmapBeforeFill
+                    // Add back to undo stack
+                    undoStack.add(UndoEntry.Fill(entry.layerIndex, currentBitmap))
                 }
             }
         }
@@ -390,6 +428,19 @@ fun DrawingScreen(
                                 modifier = Modifier.weight(1f),
                                 contentAlignment = Alignment.Center
                             ) {
+                                IconButton(onClick = { redo() }) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_redo),
+                                        contentDescription = "Redo",
+                                        tint = HEADER_ICON_COLOR,
+                                        modifier = Modifier.size(HEADER_ICON_SIZE)
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 IconButton(onClick = { showLayerManagerDialog = true }) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.ic_layers),
@@ -522,6 +573,7 @@ fun DrawingScreen(
                                         )
                                         layer.bitmap = newBitmap
                                         layer.hasFill = true
+                                        redoStack.clear() // Clear redo stack when new action is performed
                                         undoStack.add(UndoEntry.Fill(currentLayerIndex, bitmapCopy))
                                         saveAllLayers()
                                         canvasRefreshTrigger++
@@ -544,6 +596,7 @@ fun DrawingScreen(
                                         val layer = layerStates[currentLayerIndex]
                                         layer.strokes.add(stroke)
                                         drawStrokeOnBitmap(layer.bitmap, stroke)
+                                        redoStack.clear() // Clear redo stack when new action is performed
                                         undoStack.add(UndoEntry.Stroke(currentLayerIndex))
                                         saveAllLayers()
                                     }
