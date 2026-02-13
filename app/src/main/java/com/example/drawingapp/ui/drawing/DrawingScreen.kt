@@ -169,15 +169,6 @@ private fun colorToHsvValue(color: androidx.compose.ui.graphics.Color): Float {
     return hsv[2]
 }
 
-private val BG_COLOR_PALETTE = listOf(
-    Color.White,
-    Color(0xFFE53935),
-    Color(0xFF43A047),
-    Color(0xFF1E88E5),
-    Color(0xFFFB8C00),
-    Color(0xFF8E24AA)
-)
-
 @Composable
 private fun StrokeCapToggleButton(
     currentCap: StrokeCapStyle,
@@ -254,8 +245,6 @@ fun DrawingScreen(
     }
     var strokeCapStyle by remember(initialStrokeCap) { mutableStateOf(initialStrokeCap) }
     var backgroundColor by remember(pageId) { mutableStateOf(0xFFFFFFFF.toInt()) }
-    var showBgColorPickerModal by remember { mutableStateOf(false) }
-    var pendingBgColor by remember { mutableStateOf(Color(backgroundColor)) }
     var initialized by remember(pageId) { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var exportBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -372,17 +361,6 @@ fun DrawingScreen(
                                 .clickable {
                                     pendingColor = selectedColor
                                     showColorPickerModal = true
-                                }
-                        )
-                        Text("Bg", color = HEADER_ICON_COLOR, modifier = Modifier.padding(horizontal = 4.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .background(Color(backgroundColor), CircleShape)
-                                .border(2.dp, HEADER_ICON_COLOR, CircleShape)
-                                .clickable {
-                                    pendingBgColor = Color(backgroundColor)
-                                    showBgColorPickerModal = true
                                 }
                         )
                         IconButton(onClick = { undo() }) {
@@ -755,109 +733,6 @@ fun DrawingScreen(
                 showToolSelectionModal = false
             },
             onDismiss = { showToolSelectionModal = false }
-        )
-    }
-    
-    if (showBgColorPickerModal) {
-        val context = LocalContext.current
-        val lifecycleOwner = (context as? Activity) as? LifecycleOwner
-        AlertDialog(
-            onDismissRequest = { showBgColorPickerModal = false },
-            title = { Text("Background color") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("Presets", style = MaterialTheme.typography.titleSmall)
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        BG_COLOR_PALETTE.forEach { color ->
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .background(color, CircleShape)
-                                    .border(
-                                        2.dp,
-                                        if (color.toArgb() == pendingBgColor.toArgb()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                        CircleShape
-                                    )
-                                    .clickable { pendingBgColor = color }
-                            )
-                        }
-                    }
-                    AndroidView(
-                        factory = {
-                            val density = it.resources.displayMetrics.density
-                            val wheelSizePx = (280 * density).toInt()
-                            val sliderHeightPx = (48 * density).toInt()
-                            val column = LinearLayout(it).apply {
-                                orientation = LinearLayout.VERTICAL
-                            }
-                            val picker = ColorPickerView.Builder(it)
-                                .setInitialColor(pendingBgColor.toArgb())
-                                .setColorListener(ColorEnvelopeListener { envelope, _ ->
-                                    pendingBgColor = Color(envelope.getColor())
-                                })
-                                .setActionMode(ActionMode.LAST)
-                                .apply { lifecycleOwner?.let { setLifecycleOwner(it) } }
-                                .build()
-                            val brightnessBar = BrightnessSlideBar(it).apply {
-                                val whiteLine = GradientDrawable().apply {
-                                    setColor(android.graphics.Color.WHITE)
-                                    setShape(GradientDrawable.RECTANGLE)
-                                    setSize((4 * density).toInt(), sliderHeightPx)
-                                }
-                                setSelectorDrawable(whiteLine)
-                            }
-                            picker.attachBrightnessSlider(brightnessBar)
-                            column.addView(picker, ViewGroup.LayoutParams(wheelSizePx, wheelSizePx))
-                            column.addView(brightnessBar, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, sliderHeightPx))
-                            column
-                        },
-                        modifier = Modifier.size(280.dp, 320.dp),
-                        update = { root ->
-                            val color = pendingBgColor
-                            val column = root as? ViewGroup
-                            if (column != null) {
-                                val picker = column.getChildAt(0) as? ColorPickerView
-                                val brightnessBar = column.getChildAt(1) as? BrightnessSlideBar
-                                root.post {
-                                    if (picker != null && picker.width > 0 && picker.height > 0) {
-                                        picker.setHsvPaletteDrawable()
-                                        picker.selectByHsvColor(color.toArgb())
-                                    }
-                                    if (brightnessBar != null && brightnessBar.width > 0) {
-                                        brightnessBar.setSelectorPosition(colorToHsvValue(color))
-                                    }
-                                }
-                            }
-                        }
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.padding(top = 8.dp)
-                    ) {
-                        Text("Selection", style = MaterialTheme.typography.titleSmall)
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .background(pendingBgColor, CircleShape)
-                                .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    backgroundColor = pendingBgColor.toArgb()
-                    onSaveBackgroundColor(pageId, backgroundColor)
-                    showBgColorPickerModal = false
-                }) { Text("Confirm") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showBgColorPickerModal = false }) { Text("Cancel") }
-            }
         )
     }
 }
