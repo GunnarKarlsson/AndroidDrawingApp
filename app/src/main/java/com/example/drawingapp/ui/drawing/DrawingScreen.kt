@@ -119,6 +119,7 @@ private fun getToolIconRes(tool: DrawTool): Int {
         DrawTool.MarkerPen -> R.drawable.ic_marker
         DrawTool.Eraser -> R.drawable.ic_eraser
         DrawTool.Fill -> R.drawable.ic_fill
+        DrawTool.Eyedropper -> R.drawable.ic_eyedropper
     }
 }
 
@@ -130,6 +131,7 @@ private fun getToolDisplayName(tool: DrawTool): String {
         DrawTool.MarkerPen -> "Marker Pen"
         DrawTool.Eraser -> "Eraser"
         DrawTool.Fill -> "Fill"
+        DrawTool.Eyedropper -> "Eyedropper"
     }
 }
 
@@ -221,6 +223,7 @@ fun DrawingScreen(
         DrawTool.MarkerPen -> selectedColor.copy(alpha = 0.6f) // Semi-transparent for marker effect
         DrawTool.Eraser -> Color.Transparent // Eraser uses transparent color
         DrawTool.Fill -> selectedColor // Fill uses selected color for the fill
+        DrawTool.Eyedropper -> selectedColor // Not used for drawing
     }
 
     fun saveAllLayers() {
@@ -546,7 +549,21 @@ fun DrawingScreen(
                         }
                     }
                     .pointerInput(selectedTool, selectedColor, currentLayerIndex, strokeWidth) {
-                        if (selectedTool == DrawTool.Fill) {
+                        if (selectedTool == DrawTool.Eyedropper) {
+                            detectTapGestures(
+                                onTap = { offset ->
+                                    compositeLayers()?.let { composite ->
+                                        val x = offset.x.toInt().coerceIn(0, composite.width - 1)
+                                        val y = offset.y.toInt().coerceIn(0, composite.height - 1)
+                                        val pixelColor = composite.getPixel(x, y)
+                                        selectedColor = Color(pixelColor)
+                                        onConfirmStrokeColor(selectedColor)
+                                        // Switch back to pen tool after picking color
+                                        selectedTool = DrawTool.Pen
+                                    }
+                                }
+                            )
+                        } else if (selectedTool == DrawTool.Fill) {
                             detectTapGestures(
                                 onTap = { offset ->
                                     if (currentLayerIndex in layerStates.indices) {
@@ -1215,7 +1232,7 @@ private fun ToolSelectionDialog(
     onToolSelected: (DrawTool) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val allTools = listOf(DrawTool.Pen, DrawTool.Pencil, DrawTool.MarkerPen, DrawTool.Eraser, DrawTool.Fill)
+    val allTools = listOf(DrawTool.Pen, DrawTool.Pencil, DrawTool.MarkerPen, DrawTool.Eraser, DrawTool.Fill, DrawTool.Eyedropper)
     
     AlertDialog(
         onDismissRequest = onDismiss,

@@ -22,5 +22,6 @@ enum class DrawTool {
     Pencil,
     MarkerPen,
     Eraser,
-    Fill
+    Fill,
+    Eyedropper
 }
