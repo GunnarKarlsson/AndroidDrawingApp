@@ -1132,17 +1132,18 @@ private fun LayerManagerDialog(
                                 modifier = Modifier.weight(1f)
                             )
                             
-                            // Delete icon
-                            IconButton(
-                                onClick = { onDeleteLayer(originalIndex) },
-                                enabled = layerStates.size > 1
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete layer",
-                                    tint = HEADER_ICON_COLOR,
-                                    modifier = Modifier.size(24.dp)
-                                )
+                            // Delete icon (only show if more than one layer)
+                            if (layerStates.size > 1) {
+                                IconButton(
+                                    onClick = { onDeleteLayer(originalIndex) }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete layer",
+                                        tint = HEADER_ICON_COLOR,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
                             }
                         }
                     }
