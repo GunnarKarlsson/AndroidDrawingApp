@@ -98,7 +98,8 @@ class MainActivity : ComponentActivity() {
                             DrawingScreen(
                                 pageId = pageId,
                                 onLoadLayers = { repo.loadPageLayers(it) },
-                                onSaveLayers = { id, bitmaps, bgColor -> repo.savePageLayers(id, bitmaps, bgColor) },
+                                onLoadLayerMetas = { repo.loadPageLayerMetas(it) },
+                                onSaveLayers = { id, bitmaps, bgColor, layerMetas -> repo.savePageLayers(id, bitmaps, bgColor, layerMetas) },
                                 onLoadBackgroundColor = { repo.loadPageBackgroundColor(it) },
                                 onSaveBackgroundColor = { id, color -> repo.savePageBackgroundColor(id, color) },
                                 onExport = { bmp ->

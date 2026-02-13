@@ -88,8 +88,10 @@ import com.skydoves.colorpickerview.ColorPickerView
 import com.skydoves.colorpickerview.listeners.ColorEnvelopeListener
 import com.skydoves.colorpickerview.sliders.BrightnessSlideBar
 import com.example.drawingapp.data.DrawTool
+import com.example.drawingapp.data.LayerMeta
 import com.example.drawingapp.data.Stroke
 import com.example.drawingapp.data.StrokeCapStyle
+import com.example.drawingapp.data.StrokeData
 import com.example.drawingapp.util.getExportDirectoryPath
 import java.io.ByteArrayOutputStream
 
@@ -175,7 +177,8 @@ private fun colorToHsvValue(color: androidx.compose.ui.graphics.Color): Float {
 fun DrawingScreen(
     pageId: String,
     onLoadLayers: (String) -> List<Bitmap?>,
-    onSaveLayers: (String, List<Bitmap>, Int) -> Unit,
+    onLoadLayerMetas: (String) -> List<LayerMeta>?,
+    onSaveLayers: (String, List<Bitmap>, Int, List<LayerMeta>?) -> Unit,
     onLoadBackgroundColor: (String) -> Int,
     onSaveBackgroundColor: (String, Int) -> Unit,
     onExport: (Bitmap) -> Unit,
@@ -220,7 +223,10 @@ fun DrawingScreen(
 
     fun saveAllLayers() {
         if (layerStates.isNotEmpty()) {
-            onSaveLayers(pageId, layerStates.map { it.bitmap }, backgroundColor)
+            val layerMetas = layerStates.map { layer ->
+                LayerMeta(hasFill = layer.hasFill, strokes = layer.strokes.map { StrokeData.fromStroke(it) })
+            }
+            onSaveLayers(pageId, layerStates.map { it.bitmap }, backgroundColor, layerMetas)
         }
     }
 
@@ -269,7 +275,9 @@ fun DrawingScreen(
         out.eraseColor(backgroundColor)
         val canvas = android.graphics.Canvas(out)
         layerStates.forEach { layer ->
-            canvas.drawBitmap(layer.bitmap, 0f, 0f, null)
+            if (!layer.isTransparent()) {
+                canvas.drawBitmap(layer.bitmap, 0f, 0f, null)
+            }
         }
         return out
     }
@@ -457,13 +465,14 @@ fun DrawingScreen(
                             if (!initialized) {
                                 initialized = true
                                 val loaded = onLoadLayers(pageId)
+                                val layerMetas = onLoadLayerMetas(pageId)
                                 backgroundColor = onLoadBackgroundColor(pageId)
                                 if (loaded.isEmpty()) {
                                     val bmp = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
                                     bmp.eraseColor(android.graphics.Color.TRANSPARENT)
                                     layerStates.add(LayerState(bitmap = bmp))
                                 } else {
-                                    loaded.forEach { lb ->
+                                    loaded.forEachIndexed { index, lb ->
                                         val bmp = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
                                         bmp.eraseColor(android.graphics.Color.TRANSPARENT)
                                         lb?.let {
@@ -474,7 +483,10 @@ fun DrawingScreen(
                                                 null
                                             )
                                         } ?: run { bmp.eraseColor(android.graphics.Color.TRANSPARENT) }
-                                        layerStates.add(LayerState(bitmap = bmp))
+                                        val meta = layerMetas?.getOrNull(index)
+                                        val strokes = meta?.strokes?.map { it.toStroke() }?.toMutableList() ?: mutableListOf()
+                                        val hasFill = meta?.hasFill ?: true
+                                        layerStates.add(LayerState(bitmap = bmp, strokes = strokes, hasFill = hasFill))
                                     }
                                 }
                                 if (currentLayerIndex >= layerStates.size) currentLayerIndex = 0
@@ -508,6 +520,7 @@ fun DrawingScreen(
                                             tolerance = 18f
                                         )
                                         layer.bitmap = newBitmap
+                                        layer.hasFill = true
                                         undoStack.add(UndoEntry.Fill(currentLayerIndex, bitmapCopy))
                                         saveAllLayers()
                                         canvasRefreshTrigger++
@@ -545,12 +558,12 @@ fun DrawingScreen(
                             drawRect(Color(backgroundColor))
                         // Draw layers below the current layer
                         for (i in 0 until currentLayerIndex) {
-                            if (i in layerStates.indices) {
+                            if (i in layerStates.indices && !layerStates[i].isTransparent()) {
                                 drawImage(layerStates[i].bitmap.asImageBitmap(), topLeft = Offset.Zero)
                             }
                         }
                         // Draw the current layer bitmap (existing strokes on this layer)
-                        if (currentLayerIndex in layerStates.indices) {
+                        if (currentLayerIndex in layerStates.indices && !layerStates[currentLayerIndex].isTransparent()) {
                             drawImage(layerStates[currentLayerIndex].bitmap.asImageBitmap(), topLeft = Offset.Zero)
                         }
                         // Draw current stroke preview (if drawing) - appears above current layer but below layers above
@@ -586,7 +599,9 @@ fun DrawingScreen(
                         }
                         // Draw layers above the current layer
                         for (i in (currentLayerIndex + 1) until layerStates.size) {
-                            drawImage(layerStates[i].bitmap.asImageBitmap(), topLeft = Offset.Zero)
+                            if (!layerStates[i].isTransparent()) {
+                                drawImage(layerStates[i].bitmap.asImageBitmap(), topLeft = Offset.Zero)
+                            }
                         }
                     }
                     }

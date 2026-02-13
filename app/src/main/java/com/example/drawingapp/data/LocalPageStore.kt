@@ -84,6 +84,13 @@ class LocalPageStore(context: Context) {
         }
     }
 
+    fun loadPageLayerMetas(pageId: String): List<LayerMeta>? {
+        val pageDir = File(pagesDir, pageId)
+        if (!pageDir.exists()) return null
+        val meta = PageMeta.fromFile(File(pageDir, META_FILE)) ?: return null
+        return meta.layers
+    }
+
     fun loadPageBackgroundColor(pageId: String): Int {
         val pageDir = File(pagesDir, pageId)
         if (!pageDir.exists()) return 0xFFFFFFFF.toInt()
@@ -102,11 +109,12 @@ class LocalPageStore(context: Context) {
         }
     }
 
-    fun savePageLayers(pageId: String, bitmaps: List<Bitmap>, backgroundColor: Int = 0xFFFFFFFF.toInt()) {
+    fun savePageLayers(pageId: String, bitmaps: List<Bitmap>, backgroundColor: Int = 0xFFFFFFFF.toInt(), layerMetas: List<LayerMeta>? = null) {
         try {
             val pageDir = File(pagesDir, pageId)
             pageDir.mkdirs()
-            File(pageDir, META_FILE).writeText(PageMeta(layerCount = bitmaps.size, backgroundColor = backgroundColor).toJson())
+            val layerMetasToSave = layerMetas?.take(bitmaps.size)
+            File(pageDir, META_FILE).writeText(PageMeta(layerCount = bitmaps.size, backgroundColor = backgroundColor, layers = layerMetasToSave).toJson())
             bitmaps.forEachIndexed { index, bitmap ->
                 FileOutputStream(File(pageDir, "layer_$index.png")).use { out ->
                     bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)

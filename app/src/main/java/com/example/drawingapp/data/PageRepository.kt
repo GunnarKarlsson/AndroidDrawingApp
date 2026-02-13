@@ -31,8 +31,10 @@ class PageRepository(private val store: LocalPageStore) {
 
     fun loadPageLayers(pageId: String): List<Bitmap?> = store.loadPageLayers(pageId)
 
-    fun savePageLayers(pageId: String, bitmaps: List<Bitmap>, backgroundColor: Int = 0xFFFFFFFF.toInt()) {
-        store.savePageLayers(pageId, bitmaps, backgroundColor)
+    fun loadPageLayerMetas(pageId: String): List<LayerMeta>? = store.loadPageLayerMetas(pageId)
+
+    fun savePageLayers(pageId: String, bitmaps: List<Bitmap>, backgroundColor: Int = 0xFFFFFFFF.toInt(), layerMetas: List<LayerMeta>? = null) {
+        store.savePageLayers(pageId, bitmaps, backgroundColor, layerMetas)
     }
 
     fun loadPageBackgroundColor(pageId: String): Int = store.loadPageBackgroundColor(pageId)
