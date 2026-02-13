@@ -75,6 +75,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -503,7 +504,8 @@ fun DrawingScreen(
                                             newBitmap,
                                             offset.x.toInt(),
                                             offset.y.toInt(),
-                                            fillColorArgb
+                                            fillColorArgb,
+                                            tolerance = 18f
                                         )
                                         layer.bitmap = newBitmap
                                         undoStack.add(UndoEntry.Fill(currentLayerIndex, bitmapCopy))
@@ -830,30 +832,107 @@ private fun drawStrokeOnBitmap(bitmap: Bitmap?, stroke: Stroke) {
     canvas.drawPath(path, paint)
 }
 
-/** Flood-fill connected pixels of the same color with the fill color. Uses 4-connectivity. */
-private fun floodFill(bitmap: Bitmap, startX: Int, startY: Int, fillColorArgb: Int) {
+/**
+ * Scanline flood fill on a locked int[] pixel array. Faster than per-pixel queue fill.
+ * Supports color tolerance (Euclidean RGB). 4-connected. Stack-based, one seed per run above/below.
+ */
+private fun floodFill(
+    bitmap: Bitmap,
+    startX: Int,
+    startY: Int,
+    fillColorArgb: Int,
+    tolerance: Float = 0f
+) {
     val w = bitmap.width
     val h = bitmap.height
     if (w <= 0 || h <= 0) return
     val x0 = startX.coerceIn(0, w - 1)
     val y0 = startY.coerceIn(0, h - 1)
-    val targetColor = bitmap.getPixel(x0, y0)
-    if (targetColor == fillColorArgb) return
-    val queue = ArrayDeque<Pair<Int, Int>>()
-    queue.add(x0 to y0)
-    bitmap.setPixel(x0, y0, fillColorArgb)
-    val neighbors = listOf(-1 to 0, 1 to 0, 0 to -1, 0 to 1)
-    while (queue.isNotEmpty()) {
-        val (x, y) = queue.removeFirst()
-        for ((dx, dy) in neighbors) {
-            val nx = x + dx
-            val ny = y + dy
-            if (nx in 0 until w && ny in 0 until h && bitmap.getPixel(nx, ny) == targetColor) {
-                bitmap.setPixel(nx, ny, fillColorArgb)
-                queue.add(nx to ny)
+
+    val pixels = IntArray(w * h)
+    bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+
+    val targetColor = pixels[y0 * w + x0]
+    if (colorDistance(targetColor, fillColorArgb) <= tolerance) return
+
+    val visited = BooleanArray(w * h)
+    val stack = ArrayDeque<Pair<Int, Int>>()
+    stack.add(x0 to y0)
+    visited[y0 * w + x0] = true
+
+    while (stack.isNotEmpty()) {
+        val (x, y) = stack.removeLast()
+
+        var lx = x
+        while (lx >= 0 && colorDistance(pixels[y * w + lx], targetColor) <= tolerance) {
+            lx--
+        }
+        lx++
+
+        var rx = x
+        while (rx < w && colorDistance(pixels[y * w + rx], targetColor) <= tolerance) {
+            rx++
+        }
+        rx--
+
+        for (i in lx..rx) {
+            pixels[y * w + i] = fillColorArgb
+            visited[y * w + i] = true
+        }
+
+        val above = y - 1
+        val below = y + 1
+
+        if (above >= 0) {
+            var sx = lx
+            while (sx <= rx) {
+                val idx = above * w + sx
+                if (!visited[idx] && colorDistance(pixels[idx], targetColor) <= tolerance) {
+                    visited[idx] = true
+                    stack.add(sx to above)
+                    sx++
+                    while (sx <= rx && colorDistance(pixels[above * w + sx], targetColor) <= tolerance) {
+                        sx++
+                    }
+                } else {
+                    sx++
+                }
+            }
+        }
+
+        if (below < h) {
+            var sx = lx
+            while (sx <= rx) {
+                val idx = below * w + sx
+                if (!visited[idx] && colorDistance(pixels[idx], targetColor) <= tolerance) {
+                    visited[idx] = true
+                    stack.add(sx to below)
+                    sx++
+                    while (sx <= rx && colorDistance(pixels[below * w + sx], targetColor) <= tolerance) {
+                        sx++
+                    }
+                } else {
+                    sx++
+                }
             }
         }
     }
+
+    bitmap.setPixels(pixels, 0, w, 0, 0, w, h)
+}
+
+/** Simple RGB Euclidean distance (0–441 max). */
+private fun colorDistance(a: Int, b: Int): Float {
+    val r1 = (a shr 16) and 0xFF
+    val g1 = (a shr 8) and 0xFF
+    val b1 = a and 0xFF
+    val r2 = (b shr 16) and 0xFF
+    val g2 = (b shr 8) and 0xFF
+    val b2 = b and 0xFF
+    val dr = r1 - r2
+    val dg = g1 - g2
+    val db = b1 - b2
+    return sqrt((dr * dr + dg * dg + db * db).toDouble()).toFloat()
 }
 
 private fun generateLayerThumbnail(bitmap: Bitmap, size: Int = 80): Bitmap {
