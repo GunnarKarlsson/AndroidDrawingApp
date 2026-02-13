@@ -493,12 +493,19 @@ fun DrawingScreen(
                                             Bitmap.Config.ARGB_8888
                                         )
                                         android.graphics.Canvas(bitmapCopy).drawBitmap(layer.bitmap, 0f, 0f, null)
+                                        val newBitmap = Bitmap.createBitmap(
+                                            layer.bitmap.width,
+                                            layer.bitmap.height,
+                                            Bitmap.Config.ARGB_8888
+                                        )
+                                        android.graphics.Canvas(newBitmap).drawBitmap(layer.bitmap, 0f, 0f, null)
                                         floodFill(
-                                            layer.bitmap,
+                                            newBitmap,
                                             offset.x.toInt(),
                                             offset.y.toInt(),
                                             fillColorArgb
                                         )
+                                        layer.bitmap = newBitmap
                                         undoStack.add(UndoEntry.Fill(currentLayerIndex, bitmapCopy))
                                         saveAllLayers()
                                         canvasRefreshTrigger++
@@ -662,14 +669,6 @@ fun DrawingScreen(
                             val column = LinearLayout(it).apply {
                                 orientation = LinearLayout.VERTICAL
                             }
-                            val picker = ColorPickerView.Builder(it)
-                                .setInitialColor(pendingColor.toArgb())
-                                .setColorListener(ColorEnvelopeListener { envelope, _ ->
-                                    pendingColor = Color(envelope.getColor())
-                                })
-                                .setActionMode(ActionMode.LAST)
-                                .apply { lifecycleOwner?.let { setLifecycleOwner(it) } }
-                                .build()
                             val brightnessBar = BrightnessSlideBar(it).apply {
                                 val whiteLine = GradientDrawable().apply {
                                     setColor(android.graphics.Color.WHITE)
@@ -678,6 +677,18 @@ fun DrawingScreen(
                                 }
                                 setSelectorDrawable(whiteLine)
                             }
+                            val picker = ColorPickerView.Builder(it)
+                                .setInitialColor(pendingColor.toArgb())
+                                .setColorListener(ColorEnvelopeListener { envelope, _ ->
+                                    val newColor = Color(envelope.getColor())
+                                    pendingColor = newColor
+                                    brightnessBar.post {
+                                        brightnessBar.setSelectorPosition(colorToHsvValue(newColor))
+                                    }
+                                })
+                                .setActionMode(ActionMode.LAST)
+                                .apply { lifecycleOwner?.let { setLifecycleOwner(it) } }
+                                .build()
                             picker.attachBrightnessSlider(brightnessBar)
                             column.addView(picker, ViewGroup.LayoutParams(wheelSizePx, wheelSizePx))
                             column.addView(brightnessBar, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, sliderHeightPx))

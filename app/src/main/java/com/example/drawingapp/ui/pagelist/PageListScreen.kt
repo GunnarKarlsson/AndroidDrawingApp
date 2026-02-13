@@ -1,7 +1,6 @@
 package com.example.drawingapp.ui.pagelist
 
 import android.graphics.Bitmap
-import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,16 +19,18 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.res.painterResource
+import com.example.drawingapp.R
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,19 +40,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.drawingapp.data.Page
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private val PAGE_LIST_BACKGROUND = Color(0xFF565563)
+private val PAGE_LIST_ICON_COLOR = Color(0xFFE1D8D5)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,81 +62,52 @@ fun PageListScreen(
     onPageClick: (Page) -> Unit,
     onDeletePage: (Page) -> Unit,
     onLoadThumbnail: (suspend (String) -> Bitmap?)? = null,
-    onBackup: (suspend () -> Result<Unit>)? = null,
-    onRestore: (suspend () -> Result<Unit>)? = null,
-    onRestoreComplete: () -> Unit = {},
+    onSettingsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     var pageToDelete by remember { mutableStateOf<Page?>(null) }
 
     Scaffold(
         modifier = modifier,
+        containerColor = PAGE_LIST_BACKGROUND,
         topBar = {
             TopAppBar(
-                title = { Text("Drawing App") }
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = PAGE_LIST_BACKGROUND,
+                    titleContentColor = PAGE_LIST_ICON_COLOR,
+                    actionIconContentColor = PAGE_LIST_ICON_COLOR
+                ),
+                title = { Text("Drawing App", color = PAGE_LIST_ICON_COLOR) },
+                actions = {
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_settings),
+                            contentDescription = "Settings",
+                            tint = PAGE_LIST_ICON_COLOR
+                        )
+                    }
+                }
             )
         },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddPage,
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                containerColor = PAGE_LIST_ICON_COLOR,
+                contentColor = PAGE_LIST_BACKGROUND
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add page")
+                Icon(
+                    painter = painterResource(R.drawable.ic_add),
+                    contentDescription = "Add page"
+                )
             }
         }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(PAGE_LIST_BACKGROUND)
                 .padding(paddingValues)
         ) {
-            if (onBackup != null && onRestore != null) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Text(
-                        text = "Cloud backup",
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                scope.launch {
-                                    val r = onBackup()
-                                    Toast.makeText(
-                                        context,
-                                        if (r.isSuccess) "Backup complete" else "Backup failed: ${r.exceptionOrNull()?.message}",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
-                        ) { Text("Backup now") }
-                        OutlinedButton(
-                            onClick = {
-                                scope.launch {
-                                    val r = onRestore()
-                                    if (r.isSuccess) onRestoreComplete()
-                                    Toast.makeText(
-                                        context,
-                                        if (r.isSuccess) "Restore complete" else "Restore failed: ${r.exceptionOrNull()?.message}",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
-                        ) { Text("Restore") }
-                    }
-                }
-            }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 contentPadding = PaddingValues(16.dp),

@@ -27,6 +27,7 @@ import com.example.drawingapp.ui.drawing.DrawingScreen
 import com.example.drawingapp.util.exportDrawingAsPng
 import com.example.drawingapp.util.shareUri
 import com.example.drawingapp.ui.pagelist.PageListScreen
+import com.example.drawingapp.ui.settings.SettingsScreen
 import com.example.drawingapp.ui.theme.ExampleDrawingAppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -73,6 +74,12 @@ class MainActivity : ComponentActivity() {
                                     pages.addAll(repo.pages)
                                 },
                                 onLoadThumbnail = { pageId -> withContext(Dispatchers.IO) { repo.loadPageThumbnail(pageId) } },
+                                onSettingsClick = { navController.navigate("settings") }
+                            )
+                        }
+                        composable("settings") {
+                            SettingsScreen(
+                                onBack = { navController.popBackStack() },
                                 onBackup = { s3Backup.backup() },
                                 onRestore = { s3Backup.restore() },
                                 onRestoreComplete = {
