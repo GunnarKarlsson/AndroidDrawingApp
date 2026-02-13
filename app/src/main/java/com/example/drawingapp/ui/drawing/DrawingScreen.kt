@@ -37,6 +37,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -772,6 +773,7 @@ fun DrawingScreen(
             currentLayerIndex = currentLayerIndex,
             onLayerSelected = { index -> currentLayerIndex = index },
             onAddLayer = { addLayer() },
+            onDeleteLayer = { index -> deleteLayer(index) },
             onDismiss = { showLayerManagerDialog = false },
             backgroundColor = backgroundColor
         )
@@ -1018,6 +1020,7 @@ private fun LayerManagerDialog(
     currentLayerIndex: Int,
     onLayerSelected: (Int) -> Unit,
     onAddLayer: () -> Unit,
+    onDeleteLayer: (Int) -> Unit,
     onDismiss: () -> Unit,
     backgroundColor: Int
 ) {
@@ -1125,8 +1128,22 @@ private fun LayerManagerDialog(
                             Text(
                                 text = "Layer ${originalIndex + 1}",
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = HEADER_ICON_COLOR
+                                color = HEADER_ICON_COLOR,
+                                modifier = Modifier.weight(1f)
                             )
+                            
+                            // Delete icon
+                            IconButton(
+                                onClick = { onDeleteLayer(originalIndex) },
+                                enabled = layerStates.size > 1
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete layer",
+                                    tint = HEADER_ICON_COLOR,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
                     }
                 }
