@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.draw.clip
@@ -50,11 +51,14 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,6 +97,16 @@ private val STROKE_SIZE_RANGE = 1f..64f
 private const val DEFAULT_STROKE_SIZE_PX = 20f // ~30% into 1..64
 private val DEFAULT_COLOR = Color.Black
 
+private val HEADER_BACKGROUND = Color(0xFF565563)
+private val HEADER_ICON_COLOR = Color(0xFFE1D8D5)
+private val HEADER_ICON_SIZE = 29.dp // 20% larger than default 24.dp
+
+/** Represents one undoable action for the unified undo stack. */
+private sealed class UndoEntry {
+    data class Stroke(val layerIndex: Int) : UndoEntry()
+    data class Fill(val layerIndex: Int, val bitmapBeforeFill: Bitmap) : UndoEntry()
+}
+
 @Composable
 private fun getToolIconRes(tool: DrawTool): Int {
     return when (tool) {
@@ -100,6 +114,7 @@ private fun getToolIconRes(tool: DrawTool): Int {
         DrawTool.Pencil -> R.drawable.ic_pencil
         DrawTool.MarkerPen -> R.drawable.ic_marker
         DrawTool.Eraser -> R.drawable.ic_eraser
+        DrawTool.Fill -> R.drawable.ic_fill
     }
 }
 
@@ -110,6 +125,7 @@ private fun getToolDisplayName(tool: DrawTool): String {
         DrawTool.Pencil -> "Pencil"
         DrawTool.MarkerPen -> "Marker Pen"
         DrawTool.Eraser -> "Eraser"
+        DrawTool.Fill -> "Fill"
     }
 }
 
@@ -166,18 +182,19 @@ private val BG_COLOR_PALETTE = listOf(
 private fun StrokeCapToggleButton(
     currentCap: StrokeCapStyle,
     onClick: () -> Unit,
+    iconColor: Color = MaterialTheme.colorScheme.onSurface,
+    buttonSizeDp: androidx.compose.ui.unit.Dp = 32.dp,
     modifier: Modifier = Modifier
 ) {
     val strokeCap = if (currentCap == StrokeCapStyle.ROUND) StrokeCap.Round else StrokeCap.Butt
-    val lineColor = MaterialTheme.colorScheme.onSurface
     Box(
         modifier = modifier
-            .size(32.dp)
+            .size(buttonSizeDp)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         // Circle (arc open at bottom) containing the line tip — same size as color picker circle
-        Canvas(Modifier.size(32.dp)) {
+        Canvas(Modifier.size(buttonSizeDp)) {
             val arcStroke = 2.5.dp.toPx()
             val lineWidth = 6.dp.toPx()
             val inset = 2.dp.toPx()
@@ -185,7 +202,7 @@ private fun StrokeCapToggleButton(
             // Full circle (360°) except small gap at bottom: start at 100° (just after bottom) and sweep 340° to end at 80° (just before bottom)
             // This draws: 100° → 180° (left) → 270° (top) → 360°/0° (right) → 80°, leaving only ~20° gap at bottom
             drawArc(
-                color = lineColor,
+                color = iconColor,
                 topLeft = rect.topLeft,
                 size = rect.size,
                 startAngle = 100f,
@@ -200,7 +217,7 @@ private fun StrokeCapToggleButton(
             }
             drawPath(
                 path = path,
-                color = lineColor,
+                color = iconColor,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = lineWidth, cap = strokeCap)
             )
         }
@@ -244,6 +261,8 @@ fun DrawingScreen(
     var exportBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var showLayerManagerDialog by remember { mutableStateOf(false) }
     var showToolSelectionModal by remember { mutableStateOf(false) }
+    var canvasRefreshTrigger by remember { mutableStateOf(0) }
+    val undoStack = remember(pageId) { mutableStateListOf<UndoEntry>() }
 
     val strokeWidth = strokeSizePx
     val strokeColor = when (selectedTool) {
@@ -251,6 +270,7 @@ fun DrawingScreen(
         DrawTool.Pencil -> selectedColor.copy(alpha = PENCIL_ALPHA)
         DrawTool.MarkerPen -> selectedColor.copy(alpha = 0.6f) // Semi-transparent for marker effect
         DrawTool.Eraser -> Color.Transparent // Eraser uses transparent color
+        DrawTool.Fill -> selectedColor // Fill uses selected color for the fill
     }
 
     fun saveAllLayers() {
@@ -260,13 +280,25 @@ fun DrawingScreen(
     }
 
     fun undo() {
-        if (currentLayerIndex !in layerStates.indices) return
-        val layer = layerStates[currentLayerIndex]
-        if (layer.strokes.isEmpty()) return
-        layer.strokes.removeAt(layer.strokes.lastIndex)
-        layer.bitmap.eraseColor(android.graphics.Color.WHITE)
-        layer.strokes.forEach { stroke -> drawStrokeOnBitmap(layer.bitmap, stroke) }
+        if (undoStack.isEmpty()) return
+        val entry = undoStack.removeAt(undoStack.lastIndex)
+        when (entry) {
+            is UndoEntry.Stroke -> {
+                if (entry.layerIndex !in layerStates.indices) return
+                val layer = layerStates[entry.layerIndex]
+                if (layer.strokes.isEmpty()) return
+                layer.strokes.removeAt(layer.strokes.lastIndex)
+                layer.bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
+                layer.strokes.forEach { stroke -> drawStrokeOnBitmap(layer.bitmap, stroke) }
+            }
+            is UndoEntry.Fill -> {
+                if (entry.layerIndex in layerStates.indices) {
+                    layerStates[entry.layerIndex].bitmap = entry.bitmapBeforeFill
+                }
+            }
+        }
         saveAllLayers()
+        canvasRefreshTrigger++
     }
 
     fun addLayer() {
@@ -301,7 +333,12 @@ fun DrawingScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text("Drawing") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = HEADER_BACKGROUND,
+                    titleContentColor = HEADER_ICON_COLOR,
+                    actionIconContentColor = HEADER_ICON_COLOR
+                ),
+                title = { },
                 actions = {
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -314,7 +351,8 @@ fun DrawingScreen(
                             Icon(
                                 painter = painterResource(id = getToolIconRes(selectedTool)),
                                 contentDescription = getToolDisplayName(selectedTool),
-                                tint = MaterialTheme.colorScheme.onSurface
+                                tint = HEADER_ICON_COLOR,
+                                modifier = Modifier.size(HEADER_ICON_SIZE)
                             )
                         }
                         StrokeCapToggleButton(
@@ -322,43 +360,60 @@ fun DrawingScreen(
                             onClick = {
                                 strokeCapStyle = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeCapStyle.BUTT else StrokeCapStyle.ROUND
                                 onSaveStrokeCap(strokeCapStyle)
-                            }
+                            },
+                            iconColor = HEADER_ICON_COLOR,
+                            buttonSizeDp = 38.dp
                         )
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(38.dp)
                                 .background(selectedColor, CircleShape)
-                                .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                .border(2.dp, HEADER_ICON_COLOR, CircleShape)
                                 .clickable {
                                     pendingColor = selectedColor
                                     showColorPickerModal = true
                                 }
                         )
-                        Text("Bg", modifier = Modifier.padding(horizontal = 4.dp))
+                        Text("Bg", color = HEADER_ICON_COLOR, modifier = Modifier.padding(horizontal = 4.dp))
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(38.dp)
                                 .background(Color(backgroundColor), CircleShape)
-                                .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                .border(2.dp, HEADER_ICON_COLOR, CircleShape)
                                 .clickable {
                                     pendingBgColor = Color(backgroundColor)
                                     showBgColorPickerModal = true
                                 }
                         )
-                        TextButton(onClick = { undo() }) { Text("Undo") }
+                        IconButton(onClick = { undo() }) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_undo),
+                                contentDescription = "Undo",
+                                tint = HEADER_ICON_COLOR,
+                                modifier = Modifier.size(HEADER_ICON_SIZE)
+                            )
+                        }
                         IconButton(onClick = { showLayerManagerDialog = true }) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_layers),
                                 contentDescription = "Layers",
-                                tint = MaterialTheme.colorScheme.onSurface
+                                tint = HEADER_ICON_COLOR,
+                                modifier = Modifier.size(HEADER_ICON_SIZE)
                             )
                         }
-                        TextButton(onClick = {
+                        IconButton(onClick = {
                             compositeLayers()?.let { bmp ->
                                 exportBitmap = bmp
                                 showExportDialog = true
                             }
-                        }) { Text("Export") }
+                        }) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_export),
+                                contentDescription = "Export",
+                                tint = HEADER_ICON_COLOR,
+                                modifier = Modifier.size(HEADER_ICON_SIZE)
+                            )
+                        }
                     }
                 }
             )
@@ -368,7 +423,7 @@ fun DrawingScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f))
+                    .background(HEADER_BACKGROUND)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -376,7 +431,9 @@ fun DrawingScreen(
                 PreviewDot(
                     strokeWidth = strokeWidth,
                     strokeColor = strokeColor,
-                    tool = selectedTool
+                    tool = selectedTool,
+                    containerBackground = HEADER_BACKGROUND,
+                    borderColor = HEADER_ICON_COLOR
                 )
                 Slider(
                     value = strokeSizePx,
@@ -386,7 +443,12 @@ fun DrawingScreen(
                     },
                     valueRange = STROKE_SIZE_RANGE,
                     steps = 62,
-                    enabled = true, // Always enabled, including for eraser tool
+                    enabled = true,
+                    colors = SliderDefaults.colors(
+                        thumbColor = HEADER_ICON_COLOR,
+                        activeTrackColor = HEADER_ICON_COLOR,
+                        inactiveTrackColor = HEADER_ICON_COLOR.copy(alpha = 0.4f)
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -425,31 +487,59 @@ fun DrawingScreen(
                         }
                     }
                     .pointerInput(selectedTool, selectedColor, currentLayerIndex, strokeWidth) {
-                        detectDragGestures(
-                            onDragStart = { currentStrokePoints = listOf(it) },
-                            onDrag = { change, _ -> currentStrokePoints = currentStrokePoints + change.position },
-                            onDragEnd = {
-                                if (currentLayerIndex in layerStates.indices && currentStrokePoints.size > 1) {
-                                    val                                     stroke = Stroke(
-                                        points = currentStrokePoints,
-                                        color = strokeColor,
-                                        strokeWidth = strokeWidth,
-                                        tool = selectedTool,
-                                        strokeCapStyle = strokeCapStyle
-                                    )
-                                    val layer = layerStates[currentLayerIndex]
-                                    layer.strokes.add(stroke)
-                                    drawStrokeOnBitmap(layer.bitmap, stroke)
-                                    saveAllLayers()
+                        if (selectedTool == DrawTool.Fill) {
+                            detectTapGestures(
+                                onTap = { offset ->
+                                    if (currentLayerIndex in layerStates.indices) {
+                                        val layer = layerStates[currentLayerIndex]
+                                        val fillColorArgb = selectedColor.toArgb()
+                                        val bitmapCopy = Bitmap.createBitmap(
+                                            layer.bitmap.width,
+                                            layer.bitmap.height,
+                                            Bitmap.Config.ARGB_8888
+                                        )
+                                        android.graphics.Canvas(bitmapCopy).drawBitmap(layer.bitmap, 0f, 0f, null)
+                                        floodFill(
+                                            layer.bitmap,
+                                            offset.x.toInt(),
+                                            offset.y.toInt(),
+                                            fillColorArgb
+                                        )
+                                        undoStack.add(UndoEntry.Fill(currentLayerIndex, bitmapCopy))
+                                        saveAllLayers()
+                                        canvasRefreshTrigger++
+                                    }
                                 }
-                                currentStrokePoints = emptyList()
-                            }
-                        )
+                            )
+                        } else {
+                            detectDragGestures(
+                                onDragStart = { currentStrokePoints = listOf(it) },
+                                onDrag = { change, _ -> currentStrokePoints = currentStrokePoints + change.position },
+                                onDragEnd = {
+                                    if (currentLayerIndex in layerStates.indices && currentStrokePoints.size > 1) {
+                                        val stroke = Stroke(
+                                            points = currentStrokePoints,
+                                            color = strokeColor,
+                                            strokeWidth = strokeWidth,
+                                            tool = selectedTool,
+                                            strokeCapStyle = strokeCapStyle
+                                        )
+                                        val layer = layerStates[currentLayerIndex]
+                                        layer.strokes.add(stroke)
+                                        drawStrokeOnBitmap(layer.bitmap, stroke)
+                                        undoStack.add(UndoEntry.Stroke(currentLayerIndex))
+                                        saveAllLayers()
+                                    }
+                                    currentStrokePoints = emptyList()
+                                }
+                            )
+                        }
                     }
             ) {
                 if (layerStates.isNotEmpty()) {
-                    Canvas(Modifier.fillMaxSize()) {
-                        drawRect(Color(backgroundColor))
+                    key(canvasRefreshTrigger) {
+                        Canvas(Modifier.fillMaxSize()) {
+                            drawRect(Color(backgroundColor))
                         // Draw layers below the current layer
                         for (i in 0 until currentLayerIndex) {
                             if (i in layerStates.indices) {
@@ -495,6 +585,7 @@ fun DrawingScreen(
                         for (i in (currentLayerIndex + 1) until layerStates.size) {
                             drawImage(layerStates[i].bitmap.asImageBitmap(), topLeft = Offset.Zero)
                         }
+                    }
                     }
                 }
             }
@@ -776,14 +867,15 @@ private fun PreviewDot(
     strokeWidth: Float,
     strokeColor: Color,
     tool: DrawTool,
+    containerBackground: Color = MaterialTheme.colorScheme.surface,
+    borderColor: Color = MaterialTheme.colorScheme.onSurface,
     modifier: Modifier = Modifier
 ) {
-    val borderColor = MaterialTheme.colorScheme.onSurface
     Box(
         modifier = modifier
             .size(48.dp)
-            .background(MaterialTheme.colorScheme.surface, CircleShape)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+            .background(containerBackground, CircleShape)
+            .border(1.dp, borderColor, CircleShape)
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             if (tool == DrawTool.Eraser) {
@@ -834,6 +926,32 @@ private fun drawStrokeOnBitmap(bitmap: Bitmap?, stroke: Stroke) {
         else path.lineTo(offset.x, offset.y)
     }
     canvas.drawPath(path, paint)
+}
+
+/** Flood-fill connected pixels of the same color with the fill color. Uses 4-connectivity. */
+private fun floodFill(bitmap: Bitmap, startX: Int, startY: Int, fillColorArgb: Int) {
+    val w = bitmap.width
+    val h = bitmap.height
+    if (w <= 0 || h <= 0) return
+    val x0 = startX.coerceIn(0, w - 1)
+    val y0 = startY.coerceIn(0, h - 1)
+    val targetColor = bitmap.getPixel(x0, y0)
+    if (targetColor == fillColorArgb) return
+    val queue = ArrayDeque<Pair<Int, Int>>()
+    queue.add(x0 to y0)
+    bitmap.setPixel(x0, y0, fillColorArgb)
+    val neighbors = listOf(-1 to 0, 1 to 0, 0 to -1, 0 to 1)
+    while (queue.isNotEmpty()) {
+        val (x, y) = queue.removeFirst()
+        for ((dx, dy) in neighbors) {
+            val nx = x + dx
+            val ny = y + dy
+            if (nx in 0 until w && ny in 0 until h && bitmap.getPixel(nx, ny) == targetColor) {
+                bitmap.setPixel(nx, ny, fillColorArgb)
+                queue.add(nx to ny)
+            }
+        }
+    }
 }
 
 private fun generateLayerThumbnail(bitmap: Bitmap, size: Int = 80): Bitmap {
@@ -1016,7 +1134,7 @@ private fun ToolSelectionDialog(
     onToolSelected: (DrawTool) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val allTools = listOf(DrawTool.Pen, DrawTool.Pencil, DrawTool.MarkerPen, DrawTool.Eraser)
+    val allTools = listOf(DrawTool.Pen, DrawTool.Pencil, DrawTool.MarkerPen, DrawTool.Eraser, DrawTool.Fill)
     
     AlertDialog(
         onDismissRequest = onDismiss,
