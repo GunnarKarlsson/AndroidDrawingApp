@@ -130,8 +130,12 @@ fun PageListScreen(
         pageToDelete?.let { page ->
             AlertDialog(
                 onDismissRequest = { pageToDelete = null },
-                title = { Text("Delete Image") },
-                text = { Text("Are you sure you want to delete this image?") },
+                containerColor = PAGE_LIST_BACKGROUND,
+                titleContentColor = PAGE_LIST_ICON_COLOR,
+                textContentColor = PAGE_LIST_ICON_COLOR,
+                shape = RoundedCornerShape(0.dp),
+                title = { Text("Delete Image", color = PAGE_LIST_ICON_COLOR) },
+                text = { Text("Are you sure you want to delete this image?", color = PAGE_LIST_ICON_COLOR) },
                 confirmButton = {
                     TextButton(
                         onClick = {
@@ -139,14 +143,14 @@ fun PageListScreen(
                             pageToDelete = null
                         }
                     ) {
-                        Text("Confirm")
+                        Text("Confirm", color = PAGE_LIST_ICON_COLOR)
                     }
                 },
                 dismissButton = {
                     TextButton(
                         onClick = { pageToDelete = null }
                     ) {
-                        Text("Cancel")
+                        Text("Cancel", color = PAGE_LIST_ICON_COLOR)
                     }
                 }
             )

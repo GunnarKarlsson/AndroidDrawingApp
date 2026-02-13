@@ -613,12 +613,16 @@ fun DrawingScreen(
                 showExportDialog = false
                 exportBitmap = null
             },
-            title = { Text("Export drawing") },
+            containerColor = HEADER_BACKGROUND,
+            titleContentColor = HEADER_ICON_COLOR,
+            textContentColor = HEADER_ICON_COLOR,
+            shape = RoundedCornerShape(0.dp),
+            title = { Text("Export drawing", color = HEADER_ICON_COLOR) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Dimensions: ${bmp.width} × ${bmp.height}")
-                    Text(text = "File size: ~$fileSizeStr")
-                    Text(text = "Save location: $savePath")
+                    Text(text = "Dimensions: ${bmp.width} × ${bmp.height}", color = HEADER_ICON_COLOR)
+                    Text(text = "File size: ~$fileSizeStr", color = HEADER_ICON_COLOR)
+                    Text(text = "Save location: $savePath", color = HEADER_ICON_COLOR)
                 }
             },
             confirmButton = {
@@ -626,13 +630,13 @@ fun DrawingScreen(
                     onExport(bmp)
                     showExportDialog = false
                     exportBitmap = null
-                }) { Text("Export") }
+                }) { Text("Export", color = HEADER_ICON_COLOR) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showExportDialog = false
                     exportBitmap = null
-                }) { Text("Cancel") }
+                }) { Text("Cancel", color = HEADER_ICON_COLOR) }
             }
         )
     }
@@ -641,10 +645,14 @@ fun DrawingScreen(
         val lifecycleOwner = (context as? Activity) as? LifecycleOwner
         AlertDialog(
             onDismissRequest = { showColorPickerModal = false },
-            title = { Text("Stroke color") },
+            containerColor = HEADER_BACKGROUND,
+            titleContentColor = HEADER_ICON_COLOR,
+            textContentColor = HEADER_ICON_COLOR,
+            shape = RoundedCornerShape(0.dp),
+            title = { Text("Stroke color", color = HEADER_ICON_COLOR) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("Presets", style = MaterialTheme.typography.titleSmall)
+                    Text("Presets", style = MaterialTheme.typography.titleSmall, color = HEADER_ICON_COLOR)
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -720,7 +728,7 @@ fun DrawingScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.padding(top = 8.dp)
                     ) {
-                        Text("Selection", style = MaterialTheme.typography.titleSmall)
+                        Text("Selection", style = MaterialTheme.typography.titleSmall, color = HEADER_ICON_COLOR)
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
@@ -735,10 +743,10 @@ fun DrawingScreen(
                     selectedColor = pendingColor
                     onConfirmStrokeColor(pendingColor)
                     showColorPickerModal = false
-                }) { Text("Confirm") }
+                }) { Text("Confirm", color = HEADER_ICON_COLOR) }
             },
             dismissButton = {
-                TextButton(onClick = { showColorPickerModal = false }) { Text("Cancel") }
+                TextButton(onClick = { showColorPickerModal = false }) { Text("Cancel", color = HEADER_ICON_COLOR) }
             }
         )
     }
@@ -1000,7 +1008,11 @@ private fun LayerManagerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Layers") },
+        containerColor = HEADER_BACKGROUND,
+        titleContentColor = HEADER_ICON_COLOR,
+        textContentColor = HEADER_ICON_COLOR,
+        shape = RoundedCornerShape(0.dp),
+        title = { Text("Layers", color = HEADER_ICON_COLOR) },
         text = {
             Column(
                 modifier = Modifier
@@ -1014,8 +1026,8 @@ private fun LayerManagerDialog(
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Layer")
-                    Text("Add Layer", modifier = Modifier.padding(start = 8.dp))
+                    Icon(Icons.Default.Add, contentDescription = "Add Layer", tint = HEADER_ICON_COLOR)
+                    Text("Add Layer", modifier = Modifier.padding(start = 8.dp), color = HEADER_ICON_COLOR)
                 }
                 
                 // Layer list (newest first)
@@ -1033,8 +1045,9 @@ private fun LayerManagerDialog(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(
-                                    if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                .border(
+                                    1.dp,
+                                    HEADER_ICON_COLOR,
                                     RoundedCornerShape(8.dp)
                                 )
                                 .clickable { onLayerSelected(originalIndex) }
@@ -1047,7 +1060,7 @@ private fun LayerManagerDialog(
                                 Icon(
                                     Icons.Default.Check,
                                     contentDescription = "Selected",
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = HEADER_ICON_COLOR,
                                     modifier = Modifier.size(24.dp)
                                 )
                             } else {
@@ -1096,7 +1109,8 @@ private fun LayerManagerDialog(
                             // Layer label
                             Text(
                                 text = "Layer ${originalIndex + 1}",
-                                style = MaterialTheme.typography.bodyLarge
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = HEADER_ICON_COLOR
                             )
                         }
                     }
@@ -1104,7 +1118,7 @@ private fun LayerManagerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            TextButton(onClick = onDismiss) { Text("Close", color = HEADER_ICON_COLOR) }
         }
     )
 }
@@ -1119,7 +1133,11 @@ private fun ToolSelectionDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Select Tool") },
+        containerColor = HEADER_BACKGROUND,
+        titleContentColor = HEADER_ICON_COLOR,
+        textContentColor = HEADER_ICON_COLOR,
+        shape = RoundedCornerShape(0.dp),
+        title = { Text("Select Tool", color = HEADER_ICON_COLOR) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth()
@@ -1142,7 +1160,7 @@ private fun ToolSelectionDialog(
                         Icon(
                             painter = painterResource(id = getToolIconRes(tool)),
                             contentDescription = getToolDisplayName(tool),
-                            tint = MaterialTheme.colorScheme.onSurface,
+                            tint = HEADER_ICON_COLOR,
                             modifier = Modifier.size(24.dp)
                         )
                         
@@ -1150,7 +1168,8 @@ private fun ToolSelectionDialog(
                         Text(
                             text = getToolDisplayName(tool),
                             style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            color = HEADER_ICON_COLOR
                         )
                         
                         // Checkmark
@@ -1158,7 +1177,7 @@ private fun ToolSelectionDialog(
                             Icon(
                                 Icons.Default.Check,
                                 contentDescription = "Selected",
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = HEADER_ICON_COLOR,
                                 modifier = Modifier.size(24.dp)
                             )
                         } else {
