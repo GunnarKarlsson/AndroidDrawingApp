@@ -84,6 +84,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.layout.offset
 import com.skydoves.colorpickerview.ActionMode
 import com.skydoves.colorpickerview.ColorPickerView
 import com.skydoves.colorpickerview.listeners.ColorEnvelopeListener
@@ -215,6 +217,7 @@ fun DrawingScreen(
     var canvasRefreshTrigger by remember { mutableStateOf(0) }
     val undoStack = remember(pageId) { mutableStateListOf<UndoEntry>() }
     val redoStack = remember(pageId) { mutableStateListOf<UndoEntry>() }
+    var zoomLevel by remember { mutableStateOf(1.0f) }
 
     val strokeWidth = strokeSizePx
     val strokeColor = when (selectedTool) {
@@ -514,6 +517,18 @@ fun DrawingScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .then(
+                        if (canvasSize.width > 0 && canvasSize.height > 0 && zoomLevel != 1.0f) {
+                            Modifier
+                                .scale(zoomLevel)
+                                .offset(
+                                    x = (canvasSize.width * (1f - zoomLevel) / (2f * zoomLevel)).dp,
+                                    y = (canvasSize.height * (1f - zoomLevel) / (2f * zoomLevel)).dp
+                                )
+                        } else {
+                            Modifier
+                        }
+                    )
                     .onSizeChanged { size ->
                         if (size.width > 0 && size.height > 0 && (canvasSize != size)) {
                             canvasSize = size
@@ -548,13 +563,20 @@ fun DrawingScreen(
                             }
                         }
                     }
-                    .pointerInput(selectedTool, selectedColor, currentLayerIndex, strokeWidth) {
+                    .pointerInput(selectedTool, selectedColor, currentLayerIndex, strokeWidth, zoomLevel) {
+                        fun adjustOffset(offset: Offset): Offset {
+                            // When using scale modifier, touch coordinates are already in transformed space
+                            // We just need to divide by zoomLevel to get original coordinates
+                            return Offset(offset.x / zoomLevel, offset.y / zoomLevel)
+                        }
+                        
                         if (selectedTool == DrawTool.Eyedropper) {
                             detectTapGestures(
                                 onTap = { offset ->
                                     compositeLayers()?.let { composite ->
-                                        val x = offset.x.toInt().coerceIn(0, composite.width - 1)
-                                        val y = offset.y.toInt().coerceIn(0, composite.height - 1)
+                                        val adjusted = adjustOffset(offset)
+                                        val x = adjusted.x.toInt().coerceIn(0, composite.width - 1)
+                                        val y = adjusted.y.toInt().coerceIn(0, composite.height - 1)
                                         val pixelColor = composite.getPixel(x, y)
                                         selectedColor = Color(pixelColor)
                                         onConfirmStrokeColor(selectedColor)
@@ -581,10 +603,11 @@ fun DrawingScreen(
                                             Bitmap.Config.ARGB_8888
                                         )
                                         android.graphics.Canvas(newBitmap).drawBitmap(layer.bitmap, 0f, 0f, null)
+                                        val adjusted = adjustOffset(offset)
                                         floodFill(
                                             newBitmap,
-                                            offset.x.toInt(),
-                                            offset.y.toInt(),
+                                            adjusted.x.toInt(),
+                                            adjusted.y.toInt(),
                                             fillColorArgb,
                                             tolerance = 18f
                                         )
@@ -599,8 +622,12 @@ fun DrawingScreen(
                             )
                         } else {
                             detectDragGestures(
-                                onDragStart = { currentStrokePoints = listOf(it) },
-                                onDrag = { change, _ -> currentStrokePoints = currentStrokePoints + change.position },
+                                onDragStart = { 
+                                    currentStrokePoints = listOf(adjustOffset(it))
+                                },
+                                onDrag = { change, _ -> 
+                                    currentStrokePoints = currentStrokePoints + adjustOffset(change.position)
+                                },
                                 onDragEnd = {
                                     if (currentLayerIndex in layerStates.indices && currentStrokePoints.size > 1) {
                                         val stroke = Stroke(
@@ -676,6 +703,47 @@ fun DrawingScreen(
                         }
                     }
                     }
+                }
+            }
+            // Zoom controls at bottom left
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Zoom out button
+                IconButton(
+                    onClick = {
+                        if (zoomLevel > 1.0f) {
+                            zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(1.0f)
+                        }
+                    },
+                    enabled = zoomLevel > 1.0f
+                ) {
+                    Text(
+                        text = "−",
+                        color = if (zoomLevel > 1.0f) HEADER_ICON_COLOR else HEADER_ICON_COLOR.copy(alpha = 0.5f),
+                        style = MaterialTheme.typography.headlineMedium,
+                        modifier = Modifier.size(HEADER_ICON_SIZE)
+                    )
+                }
+                // Zoom in button
+                IconButton(
+                    onClick = {
+                        if (zoomLevel < 2.0f) {
+                            zoomLevel = (zoomLevel + 0.25f).coerceAtMost(2.0f)
+                        }
+                    },
+                    enabled = zoomLevel < 2.0f
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Zoom in",
+                        tint = if (zoomLevel < 2.0f) HEADER_ICON_COLOR else HEADER_ICON_COLOR.copy(alpha = 0.5f),
+                        modifier = Modifier.size(HEADER_ICON_SIZE)
+                    )
                 }
             }
         }
@@ -1250,9 +1318,16 @@ private fun ToolSelectionDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(
-                                if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                                RoundedCornerShape(8.dp)
+                            .then(
+                                if (isSelected) {
+                                    Modifier.border(
+                                        1.dp,
+                                        HEADER_ICON_COLOR,
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                } else {
+                                    Modifier
+                                }
                             )
                             .clickable { onToolSelected(tool) }
                             .padding(16.dp),
