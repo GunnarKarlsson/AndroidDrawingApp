@@ -105,7 +105,8 @@ class MainActivity : ComponentActivity() {
                                 initialStrokeColor = Color(remember { repo.loadStrokeColorArgb(Color.Black.toArgb()) }),
                                 onConfirmStrokeColor = { repo.saveStrokeColorArgb(it.toArgb()) },
                                 initialStrokeCap = if (remember { repo.loadStrokeCap(0) } == 0) StrokeCapStyle.ROUND else StrokeCapStyle.BUTT,
-                                onSaveStrokeCap = { repo.saveStrokeCap(if (it == StrokeCapStyle.ROUND) 0 else 1) }
+                                onSaveStrokeCap = { repo.saveStrokeCap(if (it == StrokeCapStyle.ROUND) 0 else 1) },
+                                onHomeClick = { navController.popBackStack() }
                             )
                         }
                     }

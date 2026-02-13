@@ -169,52 +169,6 @@ private fun colorToHsvValue(color: androidx.compose.ui.graphics.Color): Float {
     return hsv[2]
 }
 
-@Composable
-private fun StrokeCapToggleButton(
-    currentCap: StrokeCapStyle,
-    onClick: () -> Unit,
-    iconColor: Color = MaterialTheme.colorScheme.onSurface,
-    buttonSizeDp: androidx.compose.ui.unit.Dp = 32.dp,
-    modifier: Modifier = Modifier
-) {
-    val strokeCap = if (currentCap == StrokeCapStyle.ROUND) StrokeCap.Round else StrokeCap.Butt
-    Box(
-        modifier = modifier
-            .size(buttonSizeDp)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        // Circle (arc open at bottom) containing the line tip — same size as color picker circle
-        Canvas(Modifier.size(buttonSizeDp)) {
-            val arcStroke = 2.5.dp.toPx()
-            val lineWidth = 6.dp.toPx()
-            val inset = 2.dp.toPx()
-            val rect = androidx.compose.ui.geometry.Rect(inset, inset, size.width - inset, size.height - inset)
-            // Full circle (360°) except small gap at bottom: start at 100° (just after bottom) and sweep 340° to end at 80° (just before bottom)
-            // This draws: 100° → 180° (left) → 270° (top) → 360°/0° (right) → 80°, leaving only ~20° gap at bottom
-            drawArc(
-                color = iconColor,
-                topLeft = rect.topLeft,
-                size = rect.size,
-                startAngle = 100f,
-                sweepAngle = 340f,
-                useCenter = false,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = arcStroke)
-            )
-            val centerX = size.width / 2f
-            val path = Path().apply {
-                moveTo(centerX, inset + lineWidth)
-                lineTo(centerX, size.height - inset)
-            }
-            drawPath(
-                path = path,
-                color = iconColor,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = lineWidth, cap = strokeCap)
-            )
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DrawingScreen(
@@ -230,6 +184,7 @@ fun DrawingScreen(
     onConfirmStrokeColor: (Color) -> Unit = {},
     initialStrokeCap: StrokeCapStyle = StrokeCapStyle.ROUND,
     onSaveStrokeCap: (StrokeCapStyle) -> Unit = {},
+    onHomeClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val layerStates = remember(pageId) { mutableStateListOf<LayerState>() }
@@ -330,67 +285,128 @@ fun DrawingScreen(
                 title = { },
                 actions = {
                     Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
-                            onClick = { showToolSelectionModal = true }
+                        IconButton(onClick = onHomeClick) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_home),
+                                contentDescription = "Home",
+                                tint = HEADER_ICON_COLOR,
+                                modifier = Modifier.size(HEADER_ICON_SIZE)
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                painter = painterResource(id = getToolIconRes(selectedTool)),
-                                contentDescription = getToolDisplayName(selectedTool),
-                                tint = HEADER_ICON_COLOR,
-                                modifier = Modifier.size(HEADER_ICON_SIZE)
-                            )
-                        }
-                        StrokeCapToggleButton(
-                            currentCap = strokeCapStyle,
-                            onClick = {
-                                strokeCapStyle = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeCapStyle.BUTT else StrokeCapStyle.ROUND
-                                onSaveStrokeCap(strokeCapStyle)
-                            },
-                            iconColor = HEADER_ICON_COLOR,
-                            buttonSizeDp = 38.dp
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .background(selectedColor, CircleShape)
-                                .border(2.dp, HEADER_ICON_COLOR, CircleShape)
-                                .clickable {
-                                    pendingColor = selectedColor
-                                    showColorPickerModal = true
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                IconButton(
+                                    onClick = { showToolSelectionModal = true }
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = getToolIconRes(selectedTool)),
+                                        contentDescription = getToolDisplayName(selectedTool),
+                                        tint = HEADER_ICON_COLOR,
+                                        modifier = Modifier.size(HEADER_ICON_SIZE)
+                                    )
                                 }
-                        )
-                        IconButton(onClick = { undo() }) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_undo),
-                                contentDescription = "Undo",
-                                tint = HEADER_ICON_COLOR,
-                                modifier = Modifier.size(HEADER_ICON_SIZE)
-                            )
-                        }
-                        IconButton(onClick = { showLayerManagerDialog = true }) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_layers),
-                                contentDescription = "Layers",
-                                tint = HEADER_ICON_COLOR,
-                                modifier = Modifier.size(HEADER_ICON_SIZE)
-                            )
-                        }
-                        IconButton(onClick = {
-                            compositeLayers()?.let { bmp ->
-                                exportBitmap = bmp
-                                showExportDialog = true
                             }
-                        }) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_export),
-                                contentDescription = "Export",
-                                tint = HEADER_ICON_COLOR,
-                                modifier = Modifier.size(HEADER_ICON_SIZE)
-                            )
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        strokeCapStyle = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeCapStyle.BUTT else StrokeCapStyle.ROUND
+                                        onSaveStrokeCap(strokeCapStyle)
+                                    }
+                                ) {
+                                    Icon(
+                                        painter = painterResource(
+                                            id = if (strokeCapStyle == StrokeCapStyle.ROUND) R.drawable.ic_tip_round else R.drawable.ic_tip_square
+                                        ),
+                                        contentDescription = if (strokeCapStyle == StrokeCapStyle.ROUND) "Round tip" else "Square tip",
+                                        tint = HEADER_ICON_COLOR,
+                                        modifier = Modifier.size(HEADER_ICON_SIZE)
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(HEADER_ICON_SIZE)
+                                        .clickable {
+                                            pendingColor = selectedColor
+                                            showColorPickerModal = true
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(selectedColor, CircleShape)
+                                    )
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_color_circle),
+                                        contentDescription = "Stroke color",
+                                        tint = HEADER_ICON_COLOR,
+                                        modifier = Modifier.size(HEADER_ICON_SIZE)
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                IconButton(onClick = { undo() }) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_undo),
+                                        contentDescription = "Undo",
+                                        tint = HEADER_ICON_COLOR,
+                                        modifier = Modifier.size(HEADER_ICON_SIZE)
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                IconButton(onClick = { showLayerManagerDialog = true }) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_layers),
+                                        contentDescription = "Layers",
+                                        tint = HEADER_ICON_COLOR,
+                                        modifier = Modifier.size(HEADER_ICON_SIZE)
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                IconButton(onClick = {
+                                    compositeLayers()?.let { bmp ->
+                                        exportBitmap = bmp
+                                        showExportDialog = true
+                                    }
+                                }) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_export),
+                                        contentDescription = "Export",
+                                        tint = HEADER_ICON_COLOR,
+                                        modifier = Modifier.size(HEADER_ICON_SIZE)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
