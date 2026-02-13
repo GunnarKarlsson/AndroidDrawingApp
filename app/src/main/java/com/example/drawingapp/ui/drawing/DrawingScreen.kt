@@ -513,22 +513,11 @@ fun DrawingScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(
-                        if (canvasSize.width > 0 && canvasSize.height > 0 && zoomLevel != 1.0f) {
-                            Modifier
-                                .scale(zoomLevel)
-                                .offset(
-                                    x = (canvasSize.width * (1f - zoomLevel) / (2f * zoomLevel)).dp,
-                                    y = (canvasSize.height * (1f - zoomLevel) / (2f * zoomLevel)).dp
-                                )
-                        } else {
-                            Modifier
-                        }
-                    )
+                    .scale(zoomLevel)
                     .onSizeChanged { size ->
                         if (size.width > 0 && size.height > 0 && (canvasSize != size)) {
                             canvasSize = size
