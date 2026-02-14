@@ -629,7 +629,7 @@ fun DrawingScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { drawingViewRef?.zoomOut() }) {
+                IconButton(onClick = { drawingViewRef?.takeIf { it.scale > 1f }?.zoomOut() }) {
                     Text(
                         text = "−",
                         color = HEADER_ICON_COLOR,

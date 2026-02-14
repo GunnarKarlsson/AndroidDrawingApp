@@ -310,7 +310,8 @@ class DrawingView @JvmOverloads constructor(
         val vh = height.toFloat()
         val minPanX = vw - bmpW * scale
         val minPanY = vh - bmpH * scale
-        panX = panX.coerceIn(minPanX, 0f)
-        panY = panY.coerceIn(minPanY, 0f)
+        // Only coerce when range is valid (min <= max); otherwise leave pan unchanged to avoid IllegalArgumentException.
+        if (minPanX <= 0f) panX = panX.coerceIn(minPanX, 0f)
+        if (minPanY <= 0f) panY = panY.coerceIn(minPanY, 0f)
     }
 }
