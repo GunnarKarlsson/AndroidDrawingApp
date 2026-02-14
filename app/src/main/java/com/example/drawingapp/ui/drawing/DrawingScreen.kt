@@ -13,8 +13,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.draw.clip
@@ -69,9 +67,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -79,12 +74,10 @@ import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.layout.offset
 import com.skydoves.colorpickerview.ActionMode
 import com.skydoves.colorpickerview.ColorPickerView
@@ -122,6 +115,7 @@ private fun getToolIconRes(tool: DrawTool): Int {
         DrawTool.Eraser -> R.drawable.ic_eraser
         DrawTool.Fill -> R.drawable.ic_fill
         DrawTool.Eyedropper -> R.drawable.ic_eyedropper
+        DrawTool.Pan -> R.drawable.ic_pan
     }
 }
 
@@ -134,6 +128,7 @@ private fun getToolDisplayName(tool: DrawTool): String {
         DrawTool.Eraser -> "Eraser"
         DrawTool.Fill -> "Fill"
         DrawTool.Eyedropper -> "Eyedropper"
+        DrawTool.Pan -> "Pan"
     }
 }
 
@@ -198,7 +193,6 @@ fun DrawingScreen(
 ) {
     val layerStates = remember(pageId) { mutableStateListOf<LayerState>() }
     var currentLayerIndex by remember(pageId) { mutableStateOf(0) }
-    var currentStrokePoints by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var selectedTool by remember { mutableStateOf(DrawTool.Pen) }
     var selectedColor by remember(initialStrokeColor) { mutableStateOf(initialStrokeColor) }
@@ -214,11 +208,10 @@ fun DrawingScreen(
     var exportBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var showLayerManagerDialog by remember { mutableStateOf(false) }
     var showToolSelectionModal by remember { mutableStateOf(false) }
+    var drawingViewRef by remember { mutableStateOf<DrawingView?>(null) }
     var canvasRefreshTrigger by remember { mutableStateOf(0) }
     val undoStack = remember(pageId) { mutableStateListOf<UndoEntry>() }
     val redoStack = remember(pageId) { mutableStateListOf<UndoEntry>() }
-    var zoomLevel by remember { mutableStateOf(1.0f) }
-
     val strokeWidth = strokeSizePx
     val strokeColor = when (selectedTool) {
         DrawTool.Pen -> selectedColor
@@ -227,6 +220,7 @@ fun DrawingScreen(
         DrawTool.Eraser -> Color.Transparent // Eraser uses transparent color
         DrawTool.Fill -> selectedColor // Fill uses selected color for the fill
         DrawTool.Eyedropper -> selectedColor // Not used for drawing
+        DrawTool.Pan -> selectedColor // Not used when panning
     }
 
     fun saveAllLayers() {
@@ -514,69 +508,84 @@ fun DrawingScreen(
                 )
             }
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .scale(zoomLevel)
-                    .onSizeChanged { size ->
-                        if (size.width > 0 && size.height > 0 && (canvasSize != size)) {
-                            canvasSize = size
-                            if (!initialized) {
-                                initialized = true
-                                val loaded = onLoadLayers(pageId)
-                                val layerMetas = onLoadLayerMetas(pageId)
-                                backgroundColor = onLoadBackgroundColor(pageId)
-                                if (loaded.isEmpty()) {
-                                    val bmp = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
-                                    bmp.eraseColor(android.graphics.Color.TRANSPARENT)
-                                    layerStates.add(LayerState(bitmap = bmp))
-                                } else {
-                                    loaded.forEachIndexed { index, lb ->
+                AndroidView(
+                    factory = { DrawingView(it) },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .onSizeChanged { size ->
+                            if (size.width > 0 && size.height > 0 && (canvasSize != size)) {
+                                canvasSize = size
+                                if (!initialized) {
+                                    initialized = true
+                                    val loaded = onLoadLayers(pageId)
+                                    val layerMetas = onLoadLayerMetas(pageId)
+                                    backgroundColor = onLoadBackgroundColor(pageId)
+                                    if (loaded.isEmpty()) {
                                         val bmp = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
                                         bmp.eraseColor(android.graphics.Color.TRANSPARENT)
-                                        lb?.let {
-                                            android.graphics.Canvas(bmp).drawBitmap(
-                                                it,
-                                                Rect(0, 0, it.width, it.height),
-                                                Rect(0, 0, size.width, size.height),
-                                                null
-                                            )
-                                        } ?: run { bmp.eraseColor(android.graphics.Color.TRANSPARENT) }
-                                        val meta = layerMetas?.getOrNull(index)
-                                        val strokes = meta?.strokes?.map { it.toStroke() }?.toMutableList() ?: mutableListOf()
-                                        val hasFill = meta?.hasFill ?: true
-                                        layerStates.add(LayerState(bitmap = bmp, strokes = strokes, hasFill = hasFill))
+                                        layerStates.add(LayerState(bitmap = bmp))
+                                    } else {
+                                        loaded.forEachIndexed { index, lb ->
+                                            val bmp = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
+                                            bmp.eraseColor(android.graphics.Color.TRANSPARENT)
+                                            lb?.let {
+                                                android.graphics.Canvas(bmp).drawBitmap(
+                                                    it,
+                                                    Rect(0, 0, it.width, it.height),
+                                                    Rect(0, 0, size.width, size.height),
+                                                    null
+                                                )
+                                            } ?: run { bmp.eraseColor(android.graphics.Color.TRANSPARENT) }
+                                            val meta = layerMetas?.getOrNull(index)
+                                            val strokes = meta?.strokes?.map { it.toStroke() }?.toMutableList() ?: mutableListOf()
+                                            val hasFill = meta?.hasFill ?: true
+                                            layerStates.add(LayerState(bitmap = bmp, strokes = strokes, hasFill = hasFill))
+                                        }
                                     }
+                                    if (currentLayerIndex >= layerStates.size) currentLayerIndex = 0
                                 }
-                                if (currentLayerIndex >= layerStates.size) currentLayerIndex = 0
+                            }
+                        },
+                    update = { view ->
+                        drawingViewRef = view
+                        view.layerBitmaps = layerStates.map { it.bitmap }
+                        view.layerTransparent = layerStates.map { it.isTransparent() }
+                        view.currentLayerIndex = currentLayerIndex
+                        view.canvasBackgroundColor = backgroundColor
+                        view.isPanning = (selectedTool == DrawTool.Pan)
+                        view.strokePreviewColor = strokeColor.toArgb()
+                        view.strokePreviewWidth = strokeWidth
+                        view.strokePreviewCapRound = (strokeCapStyle == StrokeCapStyle.ROUND)
+                        view.strokePreviewIsEraser = (selectedTool == DrawTool.Eraser)
+                        view.onStrokeDrawn = { points ->
+                            if (currentLayerIndex in layerStates.indices && points.size > 1) {
+                                val stroke = Stroke(
+                                    points = points,
+                                    color = strokeColor,
+                                    strokeWidth = strokeWidth,
+                                    tool = selectedTool,
+                                    strokeCapStyle = strokeCapStyle
+                                )
+                                val layer = layerStates[currentLayerIndex]
+                                layer.strokes.add(stroke)
+                                drawStrokeOnBitmap(layer.bitmap, stroke)
+                                redoStack.clear()
+                                undoStack.add(UndoEntry.Stroke(currentLayerIndex))
+                                saveAllLayers()
+                                canvasRefreshTrigger++
                             }
                         }
-                    }
-                    .pointerInput(selectedTool, selectedColor, currentLayerIndex, strokeWidth, zoomLevel) {
-                        fun adjustOffset(offset: Offset): Offset {
-                            // When using scale modifier, touch coordinates are already in transformed space
-                            // We just need to divide by zoomLevel to get original coordinates
-                            return Offset(offset.x / zoomLevel, offset.y / zoomLevel)
-                        }
-                        
-                        if (selectedTool == DrawTool.Eyedropper) {
-                            detectTapGestures(
-                                onTap = { offset ->
-                                    compositeLayers()?.let { composite ->
-                                        val adjusted = adjustOffset(offset)
-                                        val x = adjusted.x.toInt().coerceIn(0, composite.width - 1)
-                                        val y = adjusted.y.toInt().coerceIn(0, composite.height - 1)
-                                        val pixelColor = composite.getPixel(x, y)
-                                        selectedColor = Color(pixelColor)
-                                        onConfirmStrokeColor(selectedColor)
-                                        // Switch back to pen tool after picking color
-                                        selectedTool = DrawTool.Pen
-                                    }
+                        view.onTap = { bx, by ->
+                            when (selectedTool) {
+                                DrawTool.Eyedropper -> compositeLayers()?.let { composite ->
+                                    val x = bx.toInt().coerceIn(0, composite.width - 1)
+                                    val y = by.toInt().coerceIn(0, composite.height - 1)
+                                    val pixelColor = composite.getPixel(x, y)
+                                    selectedColor = Color(pixelColor)
+                                    onConfirmStrokeColor(selectedColor)
+                                    selectedTool = DrawTool.Pen
                                 }
-                            )
-                        } else if (selectedTool == DrawTool.Fill) {
-                            detectTapGestures(
-                                onTap = { offset ->
+                                DrawTool.Fill -> {
                                     if (currentLayerIndex in layerStates.indices) {
                                         val layer = layerStates[currentLayerIndex]
                                         val fillColorArgb = selectedColor.toArgb()
@@ -592,108 +601,26 @@ fun DrawingScreen(
                                             Bitmap.Config.ARGB_8888
                                         )
                                         android.graphics.Canvas(newBitmap).drawBitmap(layer.bitmap, 0f, 0f, null)
-                                        val adjusted = adjustOffset(offset)
                                         floodFill(
                                             newBitmap,
-                                            adjusted.x.toInt(),
-                                            adjusted.y.toInt(),
+                                            bx.toInt(),
+                                            by.toInt(),
                                             fillColorArgb,
                                             tolerance = 18f
                                         )
                                         layer.bitmap = newBitmap
                                         layer.hasFill = true
-                                        redoStack.clear() // Clear redo stack when new action is performed
+                                        redoStack.clear()
                                         undoStack.add(UndoEntry.Fill(currentLayerIndex, bitmapCopy))
                                         saveAllLayers()
                                         canvasRefreshTrigger++
                                     }
                                 }
-                            )
-                        } else {
-                            detectDragGestures(
-                                onDragStart = { 
-                                    currentStrokePoints = listOf(adjustOffset(it))
-                                },
-                                onDrag = { change, _ -> 
-                                    currentStrokePoints = currentStrokePoints + adjustOffset(change.position)
-                                },
-                                onDragEnd = {
-                                    if (currentLayerIndex in layerStates.indices && currentStrokePoints.size > 1) {
-                                        val stroke = Stroke(
-                                            points = currentStrokePoints,
-                                            color = strokeColor,
-                                            strokeWidth = strokeWidth,
-                                            tool = selectedTool,
-                                            strokeCapStyle = strokeCapStyle
-                                        )
-                                        val layer = layerStates[currentLayerIndex]
-                                        layer.strokes.add(stroke)
-                                        drawStrokeOnBitmap(layer.bitmap, stroke)
-                                        redoStack.clear() // Clear redo stack when new action is performed
-                                        undoStack.add(UndoEntry.Stroke(currentLayerIndex))
-                                        saveAllLayers()
-                                    }
-                                    currentStrokePoints = emptyList()
-                                }
-                            )
-                        }
-                    }
-            ) {
-                if (layerStates.isNotEmpty()) {
-                    key(canvasRefreshTrigger) {
-                        Canvas(Modifier.fillMaxSize()) {
-                            drawRect(Color(backgroundColor))
-                        // Draw layers below the current layer
-                        for (i in 0 until currentLayerIndex) {
-                            if (i in layerStates.indices && !layerStates[i].isTransparent()) {
-                                drawImage(layerStates[i].bitmap.asImageBitmap(), topLeft = Offset.Zero)
-                            }
-                        }
-                        // Draw the current layer bitmap (existing strokes on this layer)
-                        if (currentLayerIndex in layerStates.indices && !layerStates[currentLayerIndex].isTransparent()) {
-                            drawImage(layerStates[currentLayerIndex].bitmap.asImageBitmap(), topLeft = Offset.Zero)
-                        }
-                        // Draw current stroke preview (if drawing) - appears above current layer but below layers above
-                        if (currentStrokePoints.isNotEmpty()) {
-                            val path = Path().apply {
-                                currentStrokePoints.forEachIndexed { i, o ->
-                                    if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y)
-                                }
-                            }
-                            if (selectedTool == DrawTool.Eraser) {
-                                // For eraser, show a red dashed line preview
-                                drawPath(
-                                    path = path,
-                                    color = Color.Red.copy(alpha = 0.5f),
-                                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                                        width = strokeWidth,
-                                        cap = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeCap.Round else StrokeCap.Butt,
-                                        join = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeJoin.Round else StrokeJoin.Bevel,
-                                        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
-                                    )
-                                )
-                            } else {
-                                drawPath(
-                                    path = path,
-                                    color = strokeColor,
-                                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                                        width = strokeWidth,
-                                        cap = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeCap.Round else StrokeCap.Butt,
-                                        join = if (strokeCapStyle == StrokeCapStyle.ROUND) StrokeJoin.Round else StrokeJoin.Bevel
-                                    )
-                                )
-                            }
-                        }
-                        // Draw layers above the current layer
-                        for (i in (currentLayerIndex + 1) until layerStates.size) {
-                            if (!layerStates[i].isTransparent()) {
-                                drawImage(layerStates[i].bitmap.asImageBitmap(), topLeft = Offset.Zero)
+                                else -> { }
                             }
                         }
                     }
-                    }
-                }
-            }
+                )
             // Zoom controls at bottom left
             Row(
                 modifier = Modifier
@@ -702,35 +629,19 @@ fun DrawingScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Zoom out button
-                IconButton(
-                    onClick = {
-                        if (zoomLevel > 1.0f) {
-                            zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(1.0f)
-                        }
-                    },
-                    enabled = zoomLevel > 1.0f
-                ) {
+                IconButton(onClick = { drawingViewRef?.zoomOut() }) {
                     Text(
                         text = "−",
-                        color = if (zoomLevel > 1.0f) HEADER_ICON_COLOR else HEADER_ICON_COLOR.copy(alpha = 0.5f),
+                        color = HEADER_ICON_COLOR,
                         style = MaterialTheme.typography.headlineMedium,
                         modifier = Modifier.size(HEADER_ICON_SIZE)
                     )
                 }
-                // Zoom in button
-                IconButton(
-                    onClick = {
-                        if (zoomLevel < 2.0f) {
-                            zoomLevel = (zoomLevel + 0.25f).coerceAtMost(2.0f)
-                        }
-                    },
-                    enabled = zoomLevel < 2.0f
-                ) {
+                IconButton(onClick = { drawingViewRef?.zoomIn() }) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = "Zoom in",
-                        tint = if (zoomLevel < 2.0f) HEADER_ICON_COLOR else HEADER_ICON_COLOR.copy(alpha = 0.5f),
+                        tint = HEADER_ICON_COLOR,
                         modifier = Modifier.size(HEADER_ICON_SIZE)
                     )
                 }
@@ -1289,7 +1200,7 @@ private fun ToolSelectionDialog(
     onToolSelected: (DrawTool) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val allTools = listOf(DrawTool.Pen, DrawTool.Pencil, DrawTool.MarkerPen, DrawTool.Eraser, DrawTool.Fill, DrawTool.Eyedropper)
+    val allTools = listOf(DrawTool.Pen, DrawTool.Pencil, DrawTool.MarkerPen, DrawTool.Eraser, DrawTool.Fill, DrawTool.Eyedropper, DrawTool.Pan)
     
     AlertDialog(
         onDismissRequest = onDismiss,
