@@ -196,7 +196,7 @@ class DrawingView @JvmOverloads constructor(
                 if (index == 0) path.moveTo(sx, sy)
                 else path.lineTo(sx, sy)
             }
-            strokePreviewPaint.strokeWidth = strokePreviewWidth * scale
+            strokePreviewPaint.strokeWidth = strokePreviewWidth
             strokePreviewPaint.strokeCap = if (strokePreviewCapRound) Paint.Cap.ROUND else Paint.Cap.BUTT
             strokePreviewPaint.strokeJoin = if (strokePreviewCapRound) Paint.Join.ROUND else Paint.Join.BEVEL
             strokePreviewPaint.pathEffect = null
