@@ -133,8 +133,8 @@ class DrawingView @JvmOverloads constructor(
             }
         }
 
-    /** Called when a stroke is finished (points in bitmap space). */
-    var onStrokeDrawn: ((List<Offset>) -> Unit)? = null
+    /** Called when a stroke is finished (points in bitmap space, strokeWidth in bitmap pixels so zoomed-in strokes are thinner). */
+    var onStrokeDrawn: ((List<Offset>, strokeWidthBitmap: Float) -> Unit)? = null
 
     /** Called when a tap is detected (x, y in bitmap space). */
     var onTap: ((Float, Float) -> Unit)? = null
@@ -288,7 +288,8 @@ class DrawingView @JvmOverloads constructor(
                     return true
                 }
                 if (isDrag && dragPoints.size >= 2) {
-                    onStrokeDrawn?.invoke(dragPoints.toList())
+                    val widthInBitmap = strokePreviewWidth / scale
+                    onStrokeDrawn?.invoke(dragPoints.toList(), widthInBitmap)
                 } else if (!isDrag && dragPoints.isNotEmpty()) {
                     val first = dragPoints.first()
                     onTap?.invoke(first.x, first.y)

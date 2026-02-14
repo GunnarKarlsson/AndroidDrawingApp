@@ -557,12 +557,12 @@ fun DrawingScreen(
                         view.strokePreviewWidth = strokeWidth
                         view.strokePreviewCapRound = (strokeCapStyle == StrokeCapStyle.ROUND)
                         view.strokePreviewIsEraser = (selectedTool == DrawTool.Eraser)
-                        view.onStrokeDrawn = { points ->
+                        view.onStrokeDrawn = { points, strokeWidthBitmap ->
                             if (currentLayerIndex in layerStates.indices && points.size > 1) {
                                 val stroke = Stroke(
                                     points = points,
                                     color = strokeColor,
-                                    strokeWidth = strokeWidth,
+                                    strokeWidth = strokeWidthBitmap,
                                     tool = selectedTool,
                                     strokeCapStyle = strokeCapStyle
                                 )
