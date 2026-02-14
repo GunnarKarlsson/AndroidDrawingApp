@@ -162,6 +162,9 @@ class DrawingView @JvmOverloads constructor(
         val w = width.toFloat()
         val h = height.toFloat()
 
+        canvas.save()
+        canvas.clipRect(0f, 0f, w, h)
+
         // Background (full view, then content may be panned over it)
         bgPaint.color = canvasBackgroundColor
         canvas.drawRect(0f, 0f, w, h, bgPaint)
@@ -214,6 +217,8 @@ class DrawingView @JvmOverloads constructor(
                 layers[i].let { bmp -> canvas.drawBitmap(bmp, matrix, null) }
             }
         }
+
+        canvas.restore()
     }
 
     /** Maps screen coordinates to bitmap-space coordinates using the inverse transform. */
