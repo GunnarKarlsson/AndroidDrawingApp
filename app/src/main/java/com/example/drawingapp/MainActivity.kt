@@ -3,6 +3,7 @@ package com.example.drawingapp
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -30,6 +31,7 @@ import com.example.drawingapp.ui.pagelist.PageListScreen
 import com.example.drawingapp.ui.settings.SettingsScreen
 import com.example.drawingapp.ui.theme.ExampleDrawingAppTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
@@ -118,7 +120,8 @@ class MainActivity : ComponentActivity() {
                                 onSaveCurveSmoothing = { repo.saveCurveSmoothing(it) },
                                 initialCurveClosingEnabled = remember { repo.loadCurveClosing(false) },
                                 onSaveCurveClosing = { repo.saveCurveClosing(it) },
-                                onHomeClick = { navController.popBackStack() }
+                                onHomeClick = { navController.popBackStack() },
+                                onExitPage = { pageId -> lifecycleScope.launch(Dispatchers.IO) { repo.generateThumbnailIfNeeded(pageId) } }
                             )
                         }
                     }

@@ -19,6 +19,7 @@ private const val KEY_CURVE_SMOOTHING = "curve_smoothing"
 private const val KEY_CURVE_CLOSING = "curve_closing"
 private const val PAGES_DIR = "pages"
 private const val META_FILE = "meta.json"
+private const val THUMBNAIL_FILE = "thumbnail.png"
 
 class LocalPageStore(context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -129,8 +130,11 @@ class LocalPageStore(context: Context) {
         try {
             val pageDir = File(pagesDir, pageId)
             pageDir.mkdirs()
+            val existingMeta = PageMeta.fromFile(File(pageDir, META_FILE))
+            val lastModified = System.currentTimeMillis()
+            val thumbnailTimestamp = existingMeta?.thumbnailTimestamp ?: 0L
             val layerMetasToSave = layerMetas?.take(bitmaps.size)
-            File(pageDir, META_FILE).writeText(PageMeta(layerCount = bitmaps.size, backgroundColor = backgroundColor, layers = layerMetasToSave).toJson())
+            File(pageDir, META_FILE).writeText(PageMeta(layerCount = bitmaps.size, backgroundColor = backgroundColor, layers = layerMetasToSave, lastModified = lastModified, thumbnailTimestamp = thumbnailTimestamp).toJson())
             bitmaps.forEachIndexed { index, bitmap ->
                 FileOutputStream(File(pageDir, "layer_$index.png")).use { out ->
                     bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
@@ -145,12 +149,25 @@ class LocalPageStore(context: Context) {
     }
 
     /**
-     * Load a composite thumbnail of the page (background + all layers).
-     * This is a scaled-down version of the full drawing: we load the same layer PNGs,
-     * composite them onto a single bitmap, and scale so the longest side fits in maxSize.
-     * Using a too-small maxSize makes strokes (2–4px) become sub-pixel and look like dots.
+     * Load thumbnail for the page: if a cached thumbnail exists and is up to date
+     * (thumbnailTimestamp >= lastModified), return it; otherwise build composite from layers.
      */
     fun loadPageThumbnail(pageId: String, maxSize: Int = 768): Bitmap? {
+        val pageDir = File(pagesDir, pageId)
+        if (!pageDir.exists()) return null
+        val meta = PageMeta.fromFile(File(pageDir, META_FILE))
+        val thumbFile = File(pageDir, THUMBNAIL_FILE)
+        if (meta != null && meta.thumbnailTimestamp >= meta.lastModified && thumbFile.exists()) {
+            return BitmapFactory.decodeFile(thumbFile.absolutePath)
+        }
+        return buildCompositeThumbnail(pageId, maxSize)
+    }
+
+    /**
+     * Build a composite thumbnail from background + all layers (scaled to maxSize).
+     * Used when no valid cached thumbnail exists.
+     */
+    private fun buildCompositeThumbnail(pageId: String, maxSize: Int = 768): Bitmap? {
         val layers = loadPageLayers(pageId)
         val bgColor = loadPageBackgroundColor(pageId)
         val firstLayer = layers.firstOrNull { it != null } ?: return null
@@ -170,6 +187,37 @@ class LocalPageStore(context: Context) {
             layer?.let { canvas.drawBitmap(it, srcRect, dstRect, paint) }
         }
         return thumbnail
+    }
+
+    /**
+     * Save a cached thumbnail bitmap and set thumbnailTimestamp in meta.
+     */
+    fun savePageThumbnail(pageId: String, bitmap: Bitmap) {
+        try {
+            val pageDir = File(pagesDir, pageId)
+            if (!pageDir.exists()) return
+            val meta = PageMeta.fromFile(File(pageDir, META_FILE)) ?: return
+            FileOutputStream(File(pageDir, THUMBNAIL_FILE)).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+            val thumbnailTimestamp = System.currentTimeMillis()
+            File(pageDir, META_FILE).writeText(meta.copy(thumbnailTimestamp = thumbnailTimestamp).toJson())
+        } catch (e: Exception) {
+            Log.e("LocalPageStore", "Failed to save thumbnail for $pageId", e)
+        }
+    }
+
+    /**
+     * If lastModified > thumbnailTimestamp, build composite and save as cached thumbnail.
+     * Call when the user exits the drawing screen.
+     */
+    fun generateThumbnailIfNeeded(pageId: String, maxSize: Int = 768) {
+        val pageDir = File(pagesDir, pageId)
+        if (!pageDir.exists()) return
+        val meta = PageMeta.fromFile(File(pageDir, META_FILE)) ?: return
+        if (meta.lastModified <= meta.thumbnailTimestamp) return
+        val composite = buildCompositeThumbnail(pageId, maxSize) ?: return
+        savePageThumbnail(pageId, composite)
     }
 
     /**

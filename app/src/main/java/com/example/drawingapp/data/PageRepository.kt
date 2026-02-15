@@ -78,4 +78,12 @@ class PageRepository(private val store: LocalPageStore) {
         store.savePageIds(_pages.map { it.id })
         store.deletePage(pageId)
     }
+
+    /**
+     * If the page content changed since the last thumbnail, build and save a new thumbnail.
+     * Call when the user exits the drawing screen (e.g. from DisposableEffect onDispose).
+     */
+    fun generateThumbnailIfNeeded(pageId: String) {
+        store.generateThumbnailIfNeeded(pageId)
+    }
 }

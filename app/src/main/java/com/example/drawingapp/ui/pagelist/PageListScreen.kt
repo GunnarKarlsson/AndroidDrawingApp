@@ -77,7 +77,7 @@ fun PageListScreen(
                     titleContentColor = PAGE_LIST_ICON_COLOR,
                     actionIconContentColor = PAGE_LIST_ICON_COLOR
                 ),
-                title = { Text("Drawing App", color = PAGE_LIST_ICON_COLOR) },
+                title = { Text("DrawApp", color = PAGE_LIST_ICON_COLOR) },
                 actions = {
                     IconButton(onClick = onSettingsClick) {
                         Icon(

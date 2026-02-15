@@ -7,12 +7,16 @@ import java.io.File
 data class PageMeta(
     val layerCount: Int,
     val backgroundColor: Int = 0xFFFFFFFF.toInt(),
-    val layers: List<LayerMeta>? = null
+    val layers: List<LayerMeta>? = null,
+    val lastModified: Long = 0L,
+    val thumbnailTimestamp: Long = 0L
 ) {
     fun toJson(): String = JSONObject()
         .apply {
             put("layerCount", layerCount)
             put("backgroundColor", backgroundColor)
+            put("lastModified", lastModified)
+            put("thumbnailTimestamp", thumbnailTimestamp)
             layers?.let { list ->
                 put("layers", JSONArray().apply {
                     list.forEach { layer -> put(layer.toJson()) }
@@ -34,7 +38,9 @@ data class PageMeta(
                 PageMeta(
                     layerCount = obj.optInt("layerCount", 1),
                     backgroundColor = obj.optInt("backgroundColor", 0xFFFFFFFF.toInt()),
-                    layers = layers
+                    layers = layers,
+                    lastModified = obj.optLong("lastModified", 0L),
+                    thumbnailTimestamp = obj.optLong("thumbnailTimestamp", 0L)
                 )
             } catch (e: Exception) {
                 null

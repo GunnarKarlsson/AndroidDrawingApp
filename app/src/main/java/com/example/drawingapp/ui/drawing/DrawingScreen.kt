@@ -56,6 +56,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
@@ -196,8 +197,12 @@ fun DrawingScreen(
     initialCurveClosingEnabled: Boolean = false,
     onSaveCurveClosing: (Boolean) -> Unit = {},
     onHomeClick: () -> Unit = {},
+    onExitPage: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    DisposableEffect(pageId) {
+        onDispose { onExitPage(pageId) }
+    }
     val layerStates = remember(pageId) { mutableStateListOf<LayerState>() }
     var currentLayerIndex by remember(pageId) { mutableStateOf(0) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
