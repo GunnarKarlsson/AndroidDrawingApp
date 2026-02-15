@@ -935,7 +935,16 @@ private fun drawStrokeOnBitmap(bitmap: Bitmap?, stroke: Stroke) {
         else path.lineTo(offset.x, offset.y)
     }
     if (stroke.closed && stroke.points.isNotEmpty()) {
-        path.lineTo(stroke.points.first().x, stroke.points.first().y)
+        val start = stroke.points.first()
+        val end = stroke.points.last()
+        if (stroke.points.size >= 2) {
+            val prev = stroke.points[stroke.points.size - 2]
+            val controlX = end.x + (end.x - prev.x) * 1.5f
+            val controlY = end.y + (end.y - prev.y) * 1.5f
+            path.quadTo(controlX, controlY, start.x, start.y)
+        } else {
+            path.lineTo(start.x, start.y)
+        }
     }
     canvas.drawPath(path, paint)
 }
