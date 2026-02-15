@@ -89,6 +89,7 @@ import com.example.drawingapp.data.Stroke
 import com.example.drawingapp.data.StrokeCapStyle
 import com.example.drawingapp.data.StrokeData
 import com.example.drawingapp.util.getExportDirectoryPath
+import com.example.drawingapp.util.smoothStrokePoints
 import java.io.ByteArrayOutputStream
 
 private const val PENCIL_ALPHA = 0.75f
@@ -188,6 +189,8 @@ fun DrawingScreen(
     onConfirmStrokeColor: (Color) -> Unit = {},
     initialStrokeCap: StrokeCapStyle = StrokeCapStyle.ROUND,
     onSaveStrokeCap: (StrokeCapStyle) -> Unit = {},
+    initialCurveSmoothingEnabled: Boolean = false,
+    onSaveCurveSmoothing: (Boolean) -> Unit = {},
     onHomeClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -202,6 +205,7 @@ fun DrawingScreen(
         mutableStateOf(initialStrokeSizePx.coerceIn(STROKE_SIZE_RANGE))
     }
     var strokeCapStyle by remember(initialStrokeCap) { mutableStateOf(initialStrokeCap) }
+    var curveSmoothingEnabled by remember(initialCurveSmoothingEnabled) { mutableStateOf(initialCurveSmoothingEnabled) }
     var backgroundColor by remember(pageId) { mutableStateOf(0xFFFFFFFF.toInt()) }
     var initialized by remember(pageId) { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
@@ -504,8 +508,23 @@ fun DrawingScreen(
                         activeTrackColor = HEADER_ICON_COLOR,
                         inactiveTrackColor = HEADER_ICON_COLOR.copy(alpha = 0.4f)
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.weight(1f)
                 )
+                IconButton(
+                    onClick = {
+                        curveSmoothingEnabled = !curveSmoothingEnabled
+                        onSaveCurveSmoothing(curveSmoothingEnabled)
+                    }
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            id = if (curveSmoothingEnabled) R.drawable.ic_smooth_on else R.drawable.ic_smooth_off
+                        ),
+                        contentDescription = if (curveSmoothingEnabled) "Curve smoothing on" else "Curve smoothing off",
+                        tint = HEADER_ICON_COLOR,
+                        modifier = Modifier.size(HEADER_ICON_SIZE)
+                    )
+                }
             }
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 AndroidView(
@@ -559,8 +578,9 @@ fun DrawingScreen(
                         view.strokePreviewIsEraser = (selectedTool == DrawTool.Eraser)
                         view.onStrokeDrawn = { points, strokeWidthBitmap ->
                             if (currentLayerIndex in layerStates.indices && points.size > 1) {
+                                val pointsToUse = if (curveSmoothingEnabled) smoothStrokePoints(points) else points
                                 val stroke = Stroke(
-                                    points = points,
+                                    points = pointsToUse,
                                     color = strokeColor,
                                     strokeWidth = strokeWidthBitmap,
                                     tool = selectedTool,

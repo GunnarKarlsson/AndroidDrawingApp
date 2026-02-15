@@ -114,6 +114,8 @@ class MainActivity : ComponentActivity() {
                                 onConfirmStrokeColor = { repo.saveStrokeColorArgb(it.toArgb()) },
                                 initialStrokeCap = if (remember { repo.loadStrokeCap(0) } == 0) StrokeCapStyle.ROUND else StrokeCapStyle.BUTT,
                                 onSaveStrokeCap = { repo.saveStrokeCap(if (it == StrokeCapStyle.ROUND) 0 else 1) },
+                                initialCurveSmoothingEnabled = remember { repo.loadCurveSmoothing(false) },
+                                onSaveCurveSmoothing = { repo.saveCurveSmoothing(it) },
                                 onHomeClick = { navController.popBackStack() }
                             )
                         }
