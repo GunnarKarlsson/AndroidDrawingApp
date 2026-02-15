@@ -531,7 +531,7 @@ fun DrawingScreen(
                             id = if (curveClosingEnabled) R.drawable.ic_close_on else R.drawable.ic_close_off
                         ),
                         contentDescription = if (curveClosingEnabled) "Curve closing on" else "Curve closing off",
-                        tint = HEADER_ICON_COLOR,
+                        tint = Color.Unspecified,
                         modifier = Modifier.size(HEADER_ICON_SIZE)
                     )
                 }
