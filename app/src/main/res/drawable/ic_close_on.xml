@@ -3,13 +3,13 @@
     android:height="24dp"
     android:viewportWidth="512"
     android:viewportHeight="512">
-    <!-- Color circle icon exactly (ring) -->
+    <!-- Color circle icon exactly (ring), header icon color -->
     <path
-        android:fillColor="#FF000000"
+        android:fillColor="#FFE1D8D5"
         android:fillType="evenOdd"
         android:pathData="M0,256 a256,256 0 1,1 512,0 a256,256 0 1,1 -512,0 z M464,256 a208,208 0 1,0 -416,0 a208,208 0 1,0 416,0 z"/>
     <!-- Small filled circle centered on the ring midline at upper left (closed-state dot), radius 96 -->
     <path
-        android:fillColor="#FF000000"
+        android:fillColor="#FFE1D8D5"
         android:pathData="M92,92 m-96,0 a96,96 0 1,1 192,0 a96,96 0 1,1 -192,0 z"/>
 </vector>

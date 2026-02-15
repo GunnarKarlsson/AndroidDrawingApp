@@ -3,9 +3,9 @@
     android:height="24dp"
     android:viewportWidth="512"
     android:viewportHeight="512">
-    <!-- Copy of closed-curve-on: ring + small circle. Small circle = bg color so it reads as a gap (open curve). -->
+    <!-- Ring in header icon color; small circle = bg color so it reads as a gap (open curve). -->
     <path
-        android:fillColor="#FF000000"
+        android:fillColor="#FFE1D8D5"
         android:fillType="evenOdd"
         android:pathData="M0,256 a256,256 0 1,1 512,0 a256,256 0 1,1 -512,0 z M464,256 a208,208 0 1,0 -416,0 a208,208 0 1,0 416,0 z"/>
     <path
