@@ -16,6 +16,7 @@ private const val KEY_STROKE_SIZE_PX = "stroke_size_px"
 private const val KEY_STROKE_COLOR_ARGB = "stroke_color_argb"
 private const val KEY_STROKE_CAP = "stroke_cap" // 0 = ROUND, 1 = BUTT
 private const val KEY_CURVE_SMOOTHING = "curve_smoothing"
+private const val KEY_CURVE_CLOSING = "curve_closing"
 private const val PAGES_DIR = "pages"
 private const val META_FILE = "meta.json"
 
@@ -58,6 +59,13 @@ class LocalPageStore(context: Context) {
 
     fun saveCurveSmoothing(value: Boolean) {
         prefs.edit().putBoolean(KEY_CURVE_SMOOTHING, value).apply()
+    }
+
+    fun loadCurveClosing(defaultValue: Boolean): Boolean =
+        prefs.getBoolean(KEY_CURVE_CLOSING, defaultValue)
+
+    fun saveCurveClosing(value: Boolean) {
+        prefs.edit().putBoolean(KEY_CURVE_CLOSING, value).apply()
     }
 
     /** Legacy: load single bitmap (first layer or old pageId.png). */

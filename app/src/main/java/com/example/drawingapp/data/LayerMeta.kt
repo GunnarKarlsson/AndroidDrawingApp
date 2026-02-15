@@ -12,14 +12,16 @@ data class StrokeData(
     val colorArgb: Int,
     val strokeWidth: Float,
     val tool: String,
-    val strokeCapStyle: String
+    val strokeCapStyle: String,
+    val closed: Boolean = false
 ) {
     fun toStroke(): Stroke = Stroke(
         points = points.map { Offset(it.first, it.second) },
         color = Color(colorArgb),
         strokeWidth = strokeWidth,
         tool = DrawTool.valueOf(tool),
-        strokeCapStyle = StrokeCapStyle.valueOf(strokeCapStyle)
+        strokeCapStyle = StrokeCapStyle.valueOf(strokeCapStyle),
+        closed = closed
     )
 
     companion object {
@@ -28,7 +30,8 @@ data class StrokeData(
             colorArgb = stroke.color.toArgb(),
             strokeWidth = stroke.strokeWidth,
             tool = stroke.tool.name,
-            strokeCapStyle = stroke.strokeCapStyle.name
+            strokeCapStyle = stroke.strokeCapStyle.name,
+            closed = stroke.closed
         )
     }
 }
@@ -52,6 +55,7 @@ data class LayerMeta(
                     put("strokeWidth", s.strokeWidth.toDouble())
                     put("tool", s.tool)
                     put("strokeCapStyle", s.strokeCapStyle)
+                    put("closed", s.closed)
                 })
             }
         })
@@ -73,7 +77,8 @@ data class LayerMeta(
                     colorArgb = so.optInt("colorArgb", 0),
                     strokeWidth = so.optDouble("strokeWidth", 1.0).toFloat(),
                     tool = so.optString("tool", "Pen"),
-                    strokeCapStyle = so.optString("strokeCapStyle", "ROUND")
+                    strokeCapStyle = so.optString("strokeCapStyle", "ROUND"),
+                    closed = so.optBoolean("closed", false)
                 )
             }
             return LayerMeta(hasFill = hasFill, strokes = strokes)

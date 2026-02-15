@@ -2,6 +2,7 @@ package com.example.drawingapp.util
 
 import android.graphics.PointF
 import androidx.compose.ui.geometry.Offset
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
@@ -26,6 +27,35 @@ fun smoothStrokePoints(
     val filtered = averageSmoothing(points, smoothingWindow)
     val smoothed = catmullRomSpline(filtered, tension = curveTension, segmentsPerSegment = segmentsPerSegment)
     return smoothed.map { Offset(it.x, it.y) }
+}
+
+/** Approximate total length of the point sequence. */
+fun pathLength(points: List<Offset>): Float {
+    if (points.size < 2) return 0f
+    var length = 0f
+    for (i in 1 until points.size) {
+        val dx = points[i].x - points[i - 1].x
+        val dy = points[i].y - points[i - 1].y
+        length += hypot(dx, dy)
+    }
+    return length
+}
+
+/**
+ * Returns true if the stroke should be auto-closed: enough points, path long enough to avoid tiny loops,
+ * and start/end within closeThresholdPx.
+ */
+fun shouldAutoClose(
+    points: List<Offset>,
+    closeThresholdPx: Float,
+    minPathLengthPx: Float = 60f
+): Boolean {
+    if (points.size < 3) return false
+    if (pathLength(points) <= minPathLengthPx) return false
+    val start = points.first()
+    val end = points.last()
+    val dist = hypot(end.x - start.x, end.y - start.y)
+    return dist <= closeThresholdPx
 }
 
 /**

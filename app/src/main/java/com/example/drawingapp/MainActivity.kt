@@ -116,6 +116,8 @@ class MainActivity : ComponentActivity() {
                                 onSaveStrokeCap = { repo.saveStrokeCap(if (it == StrokeCapStyle.ROUND) 0 else 1) },
                                 initialCurveSmoothingEnabled = remember { repo.loadCurveSmoothing(false) },
                                 onSaveCurveSmoothing = { repo.saveCurveSmoothing(it) },
+                                initialCurveClosingEnabled = remember { repo.loadCurveClosing(false) },
+                                onSaveCurveClosing = { repo.saveCurveClosing(it) },
                                 onHomeClick = { navController.popBackStack() }
                             )
                         }

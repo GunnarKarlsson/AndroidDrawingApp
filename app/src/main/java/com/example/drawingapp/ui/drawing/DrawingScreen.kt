@@ -89,10 +89,12 @@ import com.example.drawingapp.data.Stroke
 import com.example.drawingapp.data.StrokeCapStyle
 import com.example.drawingapp.data.StrokeData
 import com.example.drawingapp.util.getExportDirectoryPath
+import com.example.drawingapp.util.shouldAutoClose
 import com.example.drawingapp.util.smoothStrokePoints
 import java.io.ByteArrayOutputStream
 
 private const val PENCIL_ALPHA = 0.75f
+private const val CLOSE_THRESHOLD_PX = 50f
 private val STROKE_SIZE_RANGE = 1f..64f
 private const val DEFAULT_STROKE_SIZE_PX = 20f // ~30% into 1..64
 private val DEFAULT_COLOR = Color.Black
@@ -191,6 +193,8 @@ fun DrawingScreen(
     onSaveStrokeCap: (StrokeCapStyle) -> Unit = {},
     initialCurveSmoothingEnabled: Boolean = false,
     onSaveCurveSmoothing: (Boolean) -> Unit = {},
+    initialCurveClosingEnabled: Boolean = false,
+    onSaveCurveClosing: (Boolean) -> Unit = {},
     onHomeClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -206,6 +210,7 @@ fun DrawingScreen(
     }
     var strokeCapStyle by remember(initialStrokeCap) { mutableStateOf(initialStrokeCap) }
     var curveSmoothingEnabled by remember(initialCurveSmoothingEnabled) { mutableStateOf(initialCurveSmoothingEnabled) }
+    var curveClosingEnabled by remember(initialCurveClosingEnabled) { mutableStateOf(initialCurveClosingEnabled) }
     var backgroundColor by remember(pageId) { mutableStateOf(0xFFFFFFFF.toInt()) }
     var initialized by remember(pageId) { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
@@ -512,6 +517,21 @@ fun DrawingScreen(
                 )
                 IconButton(
                     onClick = {
+                        curveClosingEnabled = !curveClosingEnabled
+                        onSaveCurveClosing(curveClosingEnabled)
+                    }
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            id = if (curveClosingEnabled) R.drawable.ic_close_on else R.drawable.ic_close_off
+                        ),
+                        contentDescription = if (curveClosingEnabled) "Curve closing on" else "Curve closing off",
+                        tint = HEADER_ICON_COLOR,
+                        modifier = Modifier.size(HEADER_ICON_SIZE)
+                    )
+                }
+                IconButton(
+                    onClick = {
                         curveSmoothingEnabled = !curveSmoothingEnabled
                         onSaveCurveSmoothing(curveSmoothingEnabled)
                     }
@@ -579,12 +599,14 @@ fun DrawingScreen(
                         view.onStrokeDrawn = { points, strokeWidthBitmap ->
                             if (currentLayerIndex in layerStates.indices && points.size > 1) {
                                 val pointsToUse = if (curveSmoothingEnabled) smoothStrokePoints(points) else points
+                                val closed = curveClosingEnabled && shouldAutoClose(pointsToUse, CLOSE_THRESHOLD_PX)
                                 val stroke = Stroke(
                                     points = pointsToUse,
                                     color = strokeColor,
                                     strokeWidth = strokeWidthBitmap,
                                     tool = selectedTool,
-                                    strokeCapStyle = strokeCapStyle
+                                    strokeCapStyle = strokeCapStyle,
+                                    closed = closed
                                 )
                                 val layer = layerStates[currentLayerIndex]
                                 layer.strokes.add(stroke)
@@ -911,6 +933,9 @@ private fun drawStrokeOnBitmap(bitmap: Bitmap?, stroke: Stroke) {
     stroke.points.forEachIndexed { index, offset ->
         if (index == 0) path.moveTo(offset.x, offset.y)
         else path.lineTo(offset.x, offset.y)
+    }
+    if (stroke.closed && stroke.points.isNotEmpty()) {
+        path.lineTo(stroke.points.first().x, stroke.points.first().y)
     }
     canvas.drawPath(path, paint)
 }

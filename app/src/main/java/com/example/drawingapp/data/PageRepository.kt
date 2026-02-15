@@ -67,6 +67,12 @@ class PageRepository(private val store: LocalPageStore) {
         store.saveCurveSmoothing(value)
     }
 
+    fun loadCurveClosing(defaultValue: Boolean): Boolean = store.loadCurveClosing(defaultValue)
+
+    fun saveCurveClosing(value: Boolean) {
+        store.saveCurveClosing(value)
+    }
+
     fun deletePage(pageId: String) {
         _pages.removeAll { it.id == pageId }
         store.savePageIds(_pages.map { it.id })

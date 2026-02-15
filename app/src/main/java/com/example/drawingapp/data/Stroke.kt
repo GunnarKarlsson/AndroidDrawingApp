@@ -14,7 +14,8 @@ data class Stroke(
     val color: androidx.compose.ui.graphics.Color,
     val strokeWidth: Float,
     val tool: DrawTool = DrawTool.Pen,
-    val strokeCapStyle: StrokeCapStyle = StrokeCapStyle.ROUND
+    val strokeCapStyle: StrokeCapStyle = StrokeCapStyle.ROUND,
+    val closed: Boolean = false
 )
 
 enum class DrawTool {
