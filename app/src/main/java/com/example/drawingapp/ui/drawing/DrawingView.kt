@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.util.AttributeSet
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import androidx.compose.ui.geometry.Offset
 
@@ -151,6 +152,37 @@ class DrawingView @JvmOverloads constructor(
     private var lastAvgX: Float = 0f
     private var lastAvgY: Float = 0f
 
+    private var isScaling: Boolean = false
+    private var focusX: Float = 0f
+    private var focusY: Float = 0f
+    private val scaleDetector: ScaleGestureDetector =
+        ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
+                isScaling = true
+                focusX = detector.focusX
+                focusY = detector.focusY
+                return true
+            }
+
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                val factor = detector.scaleFactor
+                panX -= focusX
+                panY -= focusY
+                scale = (scale * factor).coerceIn(MIN_SCALE, MAX_SCALE)
+                panX += focusX
+                panY += focusY
+                focusX = detector.focusX
+                focusY = detector.focusY
+                clampPan()
+                invalidate()
+                return true
+            }
+
+            override fun onScaleEnd(detector: ScaleGestureDetector) {
+                isScaling = false
+            }
+        })
+
     private val bgPaint = Paint().apply {
         style = Paint.Style.FILL
         isAntiAlias = false
@@ -259,6 +291,7 @@ class DrawingView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        scaleDetector.onTouchEvent(event)
         val action = event.actionMasked
         when (action) {
             MotionEvent.ACTION_DOWN -> {
@@ -272,6 +305,7 @@ class DrawingView @JvmOverloads constructor(
                 dragPoints.add(screenToBitmap(sx, sy))
                 isDrag = false
                 isGesturePanning = false
+                isScaling = false
                 return true
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
@@ -294,6 +328,7 @@ class DrawingView @JvmOverloads constructor(
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
+                if (isScaling) return true
                 if (event.pointerCount > 1) {
                     var sumX = 0f
                     var sumY = 0f
@@ -364,7 +399,7 @@ class DrawingView @JvmOverloads constructor(
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                if (!isGesturePanning && !isPanning) {
+                if (!isGesturePanning && !isPanning && !isScaling) {
                     if (isDrag && dragPoints.size >= 2) {
                         val widthInBitmap = strokePreviewWidth / scale
                         onStrokeDrawn?.invoke(dragPoints.toList(), widthInBitmap)
@@ -375,6 +410,7 @@ class DrawingView @JvmOverloads constructor(
                 }
                 dragPoints.clear()
                 currentStrokePoints = emptyList()
+                isScaling = false
                 return true
             }
         }
