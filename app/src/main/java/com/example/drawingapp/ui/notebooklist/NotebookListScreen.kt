@@ -63,6 +63,7 @@ import com.example.drawingapp.data.Notebook
 private val NOTEBOOK_LIST_BACKGROUND = Color(0xFF565563)
 private val NOTEBOOK_LIST_ICON_COLOR = Color(0xFFE1D8D5)
 private val DEFAULT_NOTEBOOK_CARD_COLOR = Color(0xFF6B7B8C)
+private val COLLAGE_GAP = 4.dp
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -204,11 +205,17 @@ fun NotebookListScreen(
 @Composable
 fun NotebookPreviewCollage(
     bitmaps: List<Bitmap?>,
+    gapColor: Color = DEFAULT_NOTEBOOK_CARD_COLOR,
     modifier: Modifier = Modifier
 ) {
     val images = bitmaps.take(4).filterNotNull()
     if (images.isEmpty()) return
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(gapColor)
+            .padding(COLLAGE_GAP)
+    ) {
         when (images.size) {
             1 -> {
                 Image(
@@ -222,7 +229,10 @@ fun NotebookPreviewCollage(
                 )
             }
             2 -> {
-                Row(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.spacedBy(COLLAGE_GAP)
+                ) {
                     Image(
                         bitmap = images[0].asImageBitmap(),
                         contentDescription = null,
@@ -244,8 +254,11 @@ fun NotebookPreviewCollage(
                 }
             }
             3 -> {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Row(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(COLLAGE_GAP)
+                ) {
+                    Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(COLLAGE_GAP)) {
                         Image(
                             bitmap = images[0].asImageBitmap(),
                             contentDescription = null,
@@ -277,8 +290,11 @@ fun NotebookPreviewCollage(
                 }
             }
             else -> {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Row(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(COLLAGE_GAP)
+                ) {
+                    Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(COLLAGE_GAP)) {
                         Image(
                             bitmap = images[0].asImageBitmap(),
                             contentDescription = null,
@@ -298,7 +314,7 @@ fun NotebookPreviewCollage(
                             contentScale = ContentScale.Crop
                         )
                     }
-                    Row(modifier = Modifier.weight(1f)) {
+                    Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(COLLAGE_GAP)) {
                         Image(
                             bitmap = images[2].asImageBitmap(),
                             contentDescription = null,
@@ -349,7 +365,7 @@ fun NotebookCard(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (hasPreviews) {
-                NotebookPreviewCollage(bitmaps = previewBitmaps)
+                NotebookPreviewCollage(bitmaps = previewBitmaps, gapColor = cardColor)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
