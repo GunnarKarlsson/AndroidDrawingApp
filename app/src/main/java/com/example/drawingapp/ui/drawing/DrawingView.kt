@@ -147,6 +147,10 @@ class DrawingView @JvmOverloads constructor(
     private var isDrag: Boolean = false
     private val tapSlopPx: Float = 24f // treat as tap if movement under this
 
+    private var isGesturePanning: Boolean = false
+    private var lastAvgX: Float = 0f
+    private var lastAvgY: Float = 0f
+
     private val bgPaint = Paint().apply {
         style = Paint.Style.FILL
         isAntiAlias = false
@@ -255,7 +259,8 @@ class DrawingView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.action) {
+        val action = event.actionMasked
+        when (action) {
             MotionEvent.ACTION_DOWN -> {
                 val sx = event.x
                 val sy = event.y
@@ -266,38 +271,107 @@ class DrawingView @JvmOverloads constructor(
                 dragPoints.clear()
                 dragPoints.add(screenToBitmap(sx, sy))
                 isDrag = false
+                isGesturePanning = false
+                return true
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                if (event.pointerCount > 1) {
+                    isGesturePanning = true
+                    if (!isPanning && dragPoints.isNotEmpty()) {
+                        dragPoints.clear()
+                        currentStrokePoints = emptyList()
+                        isDrag = false
+                    }
+                    var sumX = 0f
+                    var sumY = 0f
+                    for (i in 0 until event.pointerCount) {
+                        sumX += event.getX(i)
+                        sumY += event.getY(i)
+                    }
+                    lastAvgX = sumX / event.pointerCount
+                    lastAvgY = sumY / event.pointerCount
+                }
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                if (isPanning) {
-                    val dx = event.x - lastMoveX
-                    val dy = event.y - lastMoveY
+                if (event.pointerCount > 1) {
+                    var sumX = 0f
+                    var sumY = 0f
+                    for (i in 0 until event.pointerCount) {
+                        sumX += event.getX(i)
+                        sumY += event.getY(i)
+                    }
+                    val avgX = sumX / event.pointerCount
+                    val avgY = sumY / event.pointerCount
+                    val dx = avgX - lastAvgX
+                    val dy = avgY - lastAvgY
                     panX += dx
                     panY += dy
                     clampPan()
-                    lastMoveX = event.x
-                    lastMoveY = event.y
                     invalidate()
-                } else {
-                    val pt = screenToBitmap(event.x, event.y)
-                    dragPoints.add(pt)
-                    if (!isDrag && (event.x - touchStartX).let { dx -> (event.y - touchStartY).let { dy -> dx * dx + dy * dy > tapSlopPx * tapSlopPx } }) {
-                        isDrag = true
+                    lastAvgX = avgX
+                    lastAvgY = avgY
+                    return true
+                } else if (event.pointerCount == 1) {
+                    if (isGesturePanning || isPanning) {
+                        val dx = event.x - lastMoveX
+                        val dy = event.y - lastMoveY
+                        panX += dx
+                        panY += dy
+                        clampPan()
+                        invalidate()
+                        lastMoveX = event.x
+                        lastMoveY = event.y
+                    } else {
+                        val pt = screenToBitmap(event.x, event.y)
+                        dragPoints.add(pt)
+                        if (!isDrag && (event.x - touchStartX).let { dx -> (event.y - touchStartY).let { dy -> dx * dx + dy * dy > tapSlopPx * tapSlopPx } }) {
+                            isDrag = true
+                        }
+                        currentStrokePoints = dragPoints.toList()
                     }
-                    currentStrokePoints = dragPoints.toList()
+                    return true
+                }
+            }
+            MotionEvent.ACTION_POINTER_UP -> {
+                if (event.pointerCount > 1) {
+                    val upIndex = event.actionIndex
+                    if (event.pointerCount == 2) {
+                        val remainingIndex = if (upIndex == 0) 1 else 0
+                        lastMoveX = event.getX(remainingIndex)
+                        lastMoveY = event.getY(remainingIndex)
+                        lastAvgX = lastMoveX
+                        lastAvgY = lastMoveY
+                    } else {
+                        var sumX = 0f
+                        var sumY = 0f
+                        var count = 0
+                        for (i in 0 until event.pointerCount) {
+                            if (i != upIndex) {
+                                sumX += event.getX(i)
+                                sumY += event.getY(i)
+                                count++
+                            }
+                        }
+                        if (count > 0) {
+                            lastAvgX = sumX / count
+                            lastAvgY = sumY / count
+                            lastMoveX = lastAvgX
+                            lastMoveY = lastAvgY
+                        }
+                    }
                 }
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                if (isPanning) {
-                    return true
-                }
-                if (isDrag && dragPoints.size >= 2) {
-                    val widthInBitmap = strokePreviewWidth / scale
-                    onStrokeDrawn?.invoke(dragPoints.toList(), widthInBitmap)
-                } else if (!isDrag && dragPoints.isNotEmpty()) {
-                    val first = dragPoints.first()
-                    onTap?.invoke(first.x, first.y)
+                if (!isGesturePanning && !isPanning) {
+                    if (isDrag && dragPoints.size >= 2) {
+                        val widthInBitmap = strokePreviewWidth / scale
+                        onStrokeDrawn?.invoke(dragPoints.toList(), widthInBitmap)
+                    } else if (!isDrag && dragPoints.isNotEmpty()) {
+                        val first = dragPoints.first()
+                        onTap?.invoke(first.x, first.y)
+                    }
                 }
                 dragPoints.clear()
                 currentStrokePoints = emptyList()
