@@ -153,26 +153,37 @@ class DrawingView @JvmOverloads constructor(
     private var lastAvgY: Float = 0f
 
     private var isScaling: Boolean = false
-    private var focusX: Float = 0f
-    private var focusY: Float = 0f
+    private var lastFocusX: Float = 0f
+    private var lastFocusY: Float = 0f
     private val scaleDetector: ScaleGestureDetector =
         ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
                 isScaling = true
-                focusX = detector.focusX
-                focusY = detector.focusY
+                lastFocusX = detector.focusX
+                lastFocusY = detector.focusY
                 return true
             }
 
             override fun onScale(detector: ScaleGestureDetector): Boolean {
+                val currentFocusX = detector.focusX
+                val currentFocusY = detector.focusY
+
+                // Pan from focus movement (handles drag-while-pinch and pure two-finger drag)
+                panX += currentFocusX - lastFocusX
+                panY += currentFocusY - lastFocusY
+
+                // Scale only when above noise threshold
                 val factor = detector.scaleFactor
-                panX -= focusX
-                panY -= focusY
-                scale = (scale * factor).coerceIn(MIN_SCALE, MAX_SCALE)
-                panX += focusX
-                panY += focusY
-                focusX = detector.focusX
-                focusY = detector.focusY
+                if (kotlin.math.abs(factor - 1f) > 0.005f) {
+                    val oldScale = scale
+                    scale = (scale * factor).coerceIn(MIN_SCALE, MAX_SCALE)
+                    val scaleRatio = scale / oldScale
+                    panX = currentFocusX + (panX - currentFocusX) * scaleRatio
+                    panY = currentFocusY + (panY - currentFocusY) * scaleRatio
+                }
+
+                lastFocusX = currentFocusX
+                lastFocusY = currentFocusY
                 clampPan()
                 invalidate()
                 return true
@@ -180,6 +191,8 @@ class DrawingView @JvmOverloads constructor(
 
             override fun onScaleEnd(detector: ScaleGestureDetector) {
                 isScaling = false
+                lastAvgX = detector.focusX
+                lastAvgY = detector.focusY
             }
         })
 
@@ -280,12 +293,11 @@ class DrawingView @JvmOverloads constructor(
 
     private fun zoomByFactor(factor: Float, focusX: Float, focusY: Float) {
         val oldScale = scale
-        scale *= factor
-        scale = scale.coerceIn(MIN_SCALE, MAX_SCALE)
+        scale = (scale * factor).coerceIn(MIN_SCALE, MAX_SCALE)
         if (scale == oldScale) return
         val scaleRatio = scale / oldScale
-        panX = panX * scaleRatio - focusX * (scaleRatio - 1f)
-        panY = panY * scaleRatio - focusY * (scaleRatio - 1f)
+        panX = focusX + (panX - focusX) * scaleRatio
+        panY = focusY + (panY - focusY) * scaleRatio
         clampPan()
         invalidate()
     }
@@ -411,6 +423,7 @@ class DrawingView @JvmOverloads constructor(
                 dragPoints.clear()
                 currentStrokePoints = emptyList()
                 isScaling = false
+                isGesturePanning = false
                 return true
             }
         }
@@ -424,10 +437,13 @@ class DrawingView @JvmOverloads constructor(
         val bmpH = layers.maxOfOrNull { it.height }?.toFloat() ?: 0f
         val vw = width.toFloat()
         val vh = height.toFloat()
-        val minPanX = vw - bmpW * scale
-        val minPanY = vh - bmpH * scale
-        // Only coerce when range is valid (min <= max); otherwise leave pan unchanged to avoid IllegalArgumentException.
-        if (minPanX <= 0f) panX = panX.coerceIn(minPanX, 0f)
-        if (minPanY <= 0f) panY = panY.coerceIn(minPanY, 0f)
+        val scaledW = bmpW * scale
+        val scaledH = bmpH * scale
+        val minPanX = if (scaledW < vw) (vw - scaledW) / 2f else vw - scaledW
+        val maxPanX = if (scaledW < vw) minPanX else 0f
+        val minPanY = if (scaledH < vh) (vh - scaledH) / 2f else vh - scaledH
+        val maxPanY = if (scaledH < vh) minPanY else 0f
+        panX = panX.coerceIn(minPanX, maxPanX)
+        panY = panY.coerceIn(minPanY, maxPanY)
     }
 }
