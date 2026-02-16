@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
@@ -22,12 +24,15 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,12 +60,15 @@ fun NotebookPagesScreen(
     onAddPage: () -> Unit,
     onPageClick: (Page) -> Unit,
     onDeletePage: (Page) -> Unit,
+    onRenamePage: (Page, String) -> Unit,
     onMovePages: (List<String>, String) -> Unit,
     onLoadThumbnail: (suspend (String) -> Bitmap?)? = null,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var pageToDelete by remember { mutableStateOf<Page?>(null) }
+    var pageToRename by remember { mutableStateOf<Page?>(null) }
+    var pageWithMenu by remember { mutableStateOf<Page?>(null) }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedPageIds by remember { mutableStateOf(setOf<String>()) }
     var showMoveDialog by remember { mutableStateOf(false) }
@@ -106,6 +114,10 @@ fun NotebookPagesScreen(
                             }
                         ) {
                             Text("Move", color = NOTEBOOK_PAGES_ICON_COLOR)
+                        }
+                    } else {
+                        TextButton(onClick = { selectionMode = true }) {
+                            Text("Select", color = NOTEBOOK_PAGES_ICON_COLOR)
                         }
                     }
                 }
@@ -167,8 +179,11 @@ fun NotebookPagesScreen(
                             onDelete = { if (!selectionMode) pageToDelete = page },
                             isSelected = page.id in selectedPageIds,
                             onLongClick = {
-                                if (!selectionMode) selectionMode = true
-                                selectedPageIds = selectedPageIds + page.id
+                                if (selectionMode) {
+                                    selectedPageIds = selectedPageIds + page.id
+                                } else {
+                                    pageWithMenu = page
+                                }
                             }
                         )
                     }
@@ -208,6 +223,34 @@ fun NotebookPagesScreen(
             )
         }
 
+        pageWithMenu?.let { page ->
+            PageOptionsDialog(
+                page = page,
+                onNameOrRename = {
+                    pageWithMenu = null
+                    pageToRename = page
+                },
+                onMove = {
+                    pageWithMenu = null
+                    selectionMode = true
+                    selectedPageIds = setOf(page.id)
+                    showMoveDialog = true
+                },
+                onDismiss = { pageWithMenu = null }
+            )
+        }
+
+        pageToRename?.let { page ->
+            RenamePageDialog(
+                page = page,
+                onConfirm = { newName ->
+                    onRenamePage(page, newName)
+                    pageToRename = null
+                },
+                onDismiss = { pageToRename = null }
+            )
+        }
+
         if (showMoveDialog) {
             MoveToNotebookDialog(
                 notebooks = notebooks.filter { it.id != currentNotebookId },
@@ -220,6 +263,51 @@ fun NotebookPagesScreen(
             )
         }
     }
+}
+
+private val DEFAULT_PAGE_TITLE_PATTERN = Regex("^Page \\d+$")
+
+@Composable
+fun PageOptionsDialog(
+    page: Page,
+    onNameOrRename: () -> Unit,
+    onMove: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val nameOrRenameLabel = if (page.title.matches(DEFAULT_PAGE_TITLE_PATTERN)) "Name" else "Rename"
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = NOTEBOOK_PAGES_BACKGROUND,
+        titleContentColor = NOTEBOOK_PAGES_ICON_COLOR,
+        textContentColor = NOTEBOOK_PAGES_ICON_COLOR,
+        shape = RoundedCornerShape(0.dp),
+        title = { Text("Page options", color = NOTEBOOK_PAGES_ICON_COLOR) },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TextButton(
+                    onClick = onNameOrRename,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(nameOrRenameLabel, color = NOTEBOOK_PAGES_ICON_COLOR)
+                }
+                TextButton(
+                    onClick = onMove,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Move to notebook", color = NOTEBOOK_PAGES_ICON_COLOR)
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = NOTEBOOK_PAGES_ICON_COLOR)
+            }
+        }
+    )
 }
 
 @Composable
@@ -257,6 +345,61 @@ fun MoveToNotebookDialog(
             }
         },
         confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = NOTEBOOK_PAGES_ICON_COLOR)
+            }
+        }
+    )
+}
+
+@Composable
+fun RenamePageDialog(
+    page: Page,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember(page.id) { mutableStateOf(page.title) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = NOTEBOOK_PAGES_BACKGROUND,
+        titleContentColor = NOTEBOOK_PAGES_ICON_COLOR,
+        textContentColor = NOTEBOOK_PAGES_ICON_COLOR,
+        shape = RoundedCornerShape(0.dp),
+        title = { Text("Rename drawing", color = NOTEBOOK_PAGES_ICON_COLOR) },
+        text = {
+            CompositionLocalProvider(
+                LocalTextSelectionColors provides TextSelectionColors(
+                    handleColor = Color.White,
+                    backgroundColor = Color.White.copy(alpha = 0.4f)
+                )
+            ) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name", color = NOTEBOOK_PAGES_ICON_COLOR) },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White),
+                    colors = TextFieldDefaults.colors(
+                        cursorColor = Color.White,
+                        focusedIndicatorColor = Color.White,
+                        unfocusedIndicatorColor = Color.White,
+                        focusedContainerColor = NOTEBOOK_PAGES_BACKGROUND,
+                        unfocusedContainerColor = NOTEBOOK_PAGES_BACKGROUND
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val trimmed = name.trim()
+                    if (trimmed.isNotBlank()) onConfirm(trimmed)
+                }
+            ) {
+                Text("Rename", color = NOTEBOOK_PAGES_ICON_COLOR)
+            }
+        },
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("Cancel", color = NOTEBOOK_PAGES_ICON_COLOR)

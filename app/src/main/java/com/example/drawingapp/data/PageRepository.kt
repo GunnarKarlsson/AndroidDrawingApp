@@ -12,7 +12,10 @@ class PageRepository(private val store: LocalPageStore) {
     fun loadPages() {
         val ids = store.loadPageIds()
         _pages.clear()
-        _pages.addAll(ids.mapIndexed { index, id -> Page(id = id, title = "Page ${index + 1}") })
+        _pages.addAll(ids.mapIndexed { index, id ->
+            val title = store.loadPageTitle(id) ?: "Page ${index + 1}"
+            Page(id = id, title = title)
+        })
         _assignments.clear()
         _assignments.putAll(store.loadAllPageNotebookAssignments())
     }
@@ -25,6 +28,16 @@ class PageRepository(private val store: LocalPageStore) {
     }
 
     fun getPageById(id: String): Page? = _pages.find { it.id == id }
+
+    fun renamePage(pageId: String, newTitle: String) {
+        val trimmed = newTitle.trim()
+        if (trimmed.isBlank()) return
+        val index = _pages.indexOfFirst { it.id == pageId }
+        if (index >= 0) {
+            _pages[index] = _pages[index].copy(title = trimmed)
+            store.savePageTitle(pageId, trimmed)
+        }
+    }
 
     fun loadPageBitmap(pageId: String): Bitmap? = store.loadPageBitmap(pageId)
 

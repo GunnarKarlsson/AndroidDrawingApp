@@ -16,6 +16,7 @@ private const val PREFS_NAME = "drawing_app"
 private const val NOTEBOOKS_FILE = "notebooks.json"
 private const val ASSIGNMENTS_FILE = "notebook_assignments.json"
 private const val KEY_PAGE_IDS = "page_ids"
+private const val KEY_PAGE_TITLE_PREFIX = "page_title_"
 private const val KEY_STROKE_SIZE_PX = "stroke_size_px"
 private const val KEY_STROKE_COLOR_ARGB = "stroke_color_argb"
 private const val KEY_STROKE_CAP = "stroke_cap" // 0 = ROUND, 1 = BUTT
@@ -38,6 +39,13 @@ class LocalPageStore(context: Context) {
 
     fun savePageIds(ids: List<String>) {
         prefs.edit().putStringSet(KEY_PAGE_IDS, ids.toSet()).apply()
+    }
+
+    fun loadPageTitle(pageId: String): String? =
+        prefs.getString(KEY_PAGE_TITLE_PREFIX + pageId, null)
+
+    fun savePageTitle(pageId: String, title: String) {
+        prefs.edit().putString(KEY_PAGE_TITLE_PREFIX + pageId, title.trim()).apply()
     }
 
     fun loadStrokeSizePx(defaultValue: Float): Float =

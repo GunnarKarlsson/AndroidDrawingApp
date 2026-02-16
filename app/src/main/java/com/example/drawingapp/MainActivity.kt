@@ -139,6 +139,11 @@ class MainActivity : ComponentActivity() {
                                     pagesInNotebook.clear()
                                     pagesInNotebook.addAll(repo.getPagesForNotebook(notebookId))
                                 },
+                                onRenamePage = { page, newName ->
+                                    repo.renamePage(page.id, newName)
+                                    pagesInNotebook.clear()
+                                    pagesInNotebook.addAll(repo.getPagesForNotebook(notebookId))
+                                },
                                 onMovePages = { pageIds, targetNotebookId ->
                                     repo.movePagesToNotebook(pageIds, targetNotebookId)
                                     pagesInNotebook.clear()
