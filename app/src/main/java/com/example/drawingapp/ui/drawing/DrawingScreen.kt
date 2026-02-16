@@ -687,7 +687,17 @@ fun DrawingScreen(
                                                 xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
                                             }
                                         }
-                                        canvas.drawCircle(bx, by, dotRadiusBitmap, paint)
+                                        if (strokeCapStyle == StrokeCapStyle.ROUND) {
+                                            canvas.drawCircle(bx, by, dotRadiusBitmap, paint)
+                                        } else {
+                                            canvas.drawRect(
+                                                bx - dotRadiusBitmap,
+                                                by - dotRadiusBitmap,
+                                                bx + dotRadiusBitmap,
+                                                by + dotRadiusBitmap,
+                                                paint
+                                            )
+                                        }
                                         undoStack.add(UndoEntry.Fill(currentLayerIndex, bitmapBefore))
                                         redoStack.clear()
                                         saveAllLayers()

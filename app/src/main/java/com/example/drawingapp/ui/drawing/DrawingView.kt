@@ -291,7 +291,17 @@ class DrawingView @JvmOverloads constructor(
                 val dotRadiusScreen = strokePreviewWidth / 2f
                 val screenX = panX + scale * pos.x
                 val screenY = panY + scale * pos.y
-                canvas.drawCircle(screenX, screenY, dotRadiusScreen, paint)
+                if (strokePreviewCapRound) {
+                    canvas.drawCircle(screenX, screenY, dotRadiusScreen, paint)
+                } else {
+                    canvas.drawRect(
+                        screenX - dotRadiusScreen,
+                        screenY - dotRadiusScreen,
+                        screenX + dotRadiusScreen,
+                        screenY + dotRadiusScreen,
+                        paint
+                    )
+                }
             }
         }
         // Layers above current
