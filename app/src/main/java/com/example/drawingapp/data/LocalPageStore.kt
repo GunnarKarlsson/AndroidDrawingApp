@@ -157,16 +157,33 @@ class LocalPageStore(context: Context) {
     /**
      * Load thumbnail for the page: if a cached thumbnail exists and is up to date
      * (thumbnailTimestamp >= lastModified), return it; otherwise build composite from layers.
+     * For legacy pages (single pageId.png, no directory), builds a scaled thumbnail from that file.
      */
     fun loadPageThumbnail(pageId: String, maxSize: Int = 768): Bitmap? {
         val pageDir = File(pagesDir, pageId)
-        if (!pageDir.exists()) return null
+        if (!pageDir.exists()) {
+            // Legacy: single PNG file, no per-page directory
+            val full = loadPageBitmap(pageId) ?: return null
+            return scaleBitmapToMax(full, maxSize)
+        }
         val meta = PageMeta.fromFile(File(pageDir, META_FILE))
         val thumbFile = File(pageDir, THUMBNAIL_FILE)
         if (meta != null && meta.thumbnailTimestamp >= meta.lastModified && thumbFile.exists()) {
             return BitmapFactory.decodeFile(thumbFile.absolutePath)
         }
-        return buildCompositeThumbnail(pageId, maxSize)
+        buildCompositeThumbnail(pageId, maxSize)?.let { return it }
+        // Fallback: e.g. missing layers or meta — try first layer or single bitmap
+        return loadPageBitmap(pageId)?.let { scaleBitmapToMax(it, maxSize) }
+    }
+
+    private fun scaleBitmapToMax(source: Bitmap, maxSize: Int): Bitmap? {
+        val width = source.width
+        val height = source.height
+        if (width <= 0 || height <= 0) return null
+        val scale = (maxSize.toFloat() / maxOf(width, height)).coerceAtMost(1f)
+        val thumbWidth = (width * scale).toInt().coerceAtLeast(1)
+        val thumbHeight = (height * scale).toInt().coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(source, thumbWidth, thumbHeight, true)
     }
 
     /**

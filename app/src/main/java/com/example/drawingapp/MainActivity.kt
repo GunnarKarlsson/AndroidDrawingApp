@@ -84,6 +84,11 @@ class MainActivity : ComponentActivity() {
                         composable("notebooklist") {
                             NotebookListScreen(
                                 notebooks = notebooks,
+                                loadNotebookPreviews = { id ->
+                                    withContext(Dispatchers.IO) {
+                                        repo.getNotebookPreviewThumbnails(id)
+                                    }
+                                },
                                 onCreateNotebook = { showCreateNotebookDialog = true },
                                 onNotebookClick = { notebook ->
                                     navController.navigate("notebook/${notebook.id}")

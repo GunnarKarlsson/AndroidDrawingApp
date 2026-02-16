@@ -136,6 +136,15 @@ class PageRepository(private val store: LocalPageStore) {
     fun getPagesForNotebook(notebookId: String): List<Page> =
         _pages.filter { (_assignments[it.id] ?: Notebook.DEFAULT_ID) == notebookId }
 
+    /**
+     * Returns up to maxCount page thumbnails for the notebook (for cover preview).
+     * Order follows getPagesForNotebook. Null entries for pages with no thumbnail yet.
+     */
+    fun getNotebookPreviewThumbnails(notebookId: String, maxCount: Int = 4): List<Bitmap?> {
+        val pages = getPagesForNotebook(notebookId).take(maxCount)
+        return pages.map { loadPageThumbnail(it.id) }
+    }
+
     fun assignPageToNotebook(pageId: String, notebookId: String) {
         _assignments[pageId] = notebookId
         store.savePageNotebook(pageId, notebookId)
