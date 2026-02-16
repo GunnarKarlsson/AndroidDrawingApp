@@ -6,10 +6,15 @@ class PageRepository(private val store: LocalPageStore) {
     private val _pages = mutableListOf<Page>()
     val pages: List<Page> get() = _pages.toList()
 
+    /** In-memory page -> notebook assignment; missing key means default notebook. */
+    private val _assignments = mutableMapOf<String, String>()
+
     fun loadPages() {
         val ids = store.loadPageIds()
         _pages.clear()
         _pages.addAll(ids.mapIndexed { index, id -> Page(id = id, title = "Page ${index + 1}") })
+        _assignments.clear()
+        _assignments.putAll(store.loadAllPageNotebookAssignments())
     }
 
     fun addPage(): Page {
@@ -75,8 +80,63 @@ class PageRepository(private val store: LocalPageStore) {
 
     fun deletePage(pageId: String) {
         _pages.removeAll { it.id == pageId }
+        _assignments.remove(pageId)
         store.savePageIds(_pages.map { it.id })
+        store.savePageNotebook(pageId, null)
         store.deletePage(pageId)
+    }
+
+    // --- Notebooks ---
+
+    /** Returns all notebooks. On first run, creates default notebook and assigns all existing pages to it. */
+    fun getNotebooks(): List<Notebook> {
+        var list = store.loadNotebooks()
+        if (list.isEmpty()) {
+            val default = Notebook(id = Notebook.DEFAULT_ID, name = "All Pages", createdAt = System.currentTimeMillis())
+            val pageIds = store.loadPageIds()
+            val newMap = pageIds.associateWith { Notebook.DEFAULT_ID }
+            store.saveAllPageNotebookAssignments(newMap)
+            store.saveNotebooks(listOf(default))
+            _assignments.clear()
+            _assignments.putAll(newMap)
+            list = listOf(default)
+        }
+        return list
+    }
+
+    fun createNotebook(name: String): Notebook {
+        val nb = Notebook(id = Notebook.newId(), name = name.trim(), createdAt = System.currentTimeMillis())
+        val list = store.loadNotebooks().toMutableList()
+        list.add(nb)
+        store.saveNotebooks(list)
+        return nb
+    }
+
+    fun deleteNotebook(notebookId: String) {
+        if (notebookId == Notebook.DEFAULT_ID) return
+        val list = store.loadNotebooks().filter { it.id != notebookId }
+        store.saveNotebooks(list)
+        _assignments.keys.toList().forEach { pageId ->
+            if (_assignments[pageId] == notebookId) {
+                _assignments[pageId] = Notebook.DEFAULT_ID
+                store.savePageNotebook(pageId, Notebook.DEFAULT_ID)
+            }
+        }
+    }
+
+    fun getPagesForNotebook(notebookId: String): List<Page> =
+        _pages.filter { (_assignments[it.id] ?: Notebook.DEFAULT_ID) == notebookId }
+
+    fun assignPageToNotebook(pageId: String, notebookId: String) {
+        _assignments[pageId] = notebookId
+        store.savePageNotebook(pageId, notebookId)
+    }
+
+    fun movePagesToNotebook(pageIds: List<String>, notebookId: String) {
+        pageIds.forEach {
+            _assignments[it] = notebookId
+            store.savePageNotebook(it, notebookId)
+        }
     }
 
     /**

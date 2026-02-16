@@ -7,10 +7,14 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
 import android.util.Log
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 
 private const val PREFS_NAME = "drawing_app"
+private const val NOTEBOOKS_FILE = "notebooks.json"
+private const val ASSIGNMENTS_FILE = "notebook_assignments.json"
 private const val KEY_PAGE_IDS = "page_ids"
 private const val KEY_STROKE_SIZE_PX = "stroke_size_px"
 private const val KEY_STROKE_COLOR_ARGB = "stroke_color_argb"
@@ -24,6 +28,8 @@ private const val THUMBNAIL_FILE = "thumbnail.png"
 class LocalPageStore(context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val pagesDir = File(context.filesDir, PAGES_DIR).also { it.mkdirs() }
+    private val notebooksFile = File(context.filesDir, NOTEBOOKS_FILE)
+    private val assignmentsFile = File(context.filesDir, ASSIGNMENTS_FILE)
 
     fun loadPageIds(): List<String> {
         val ids = prefs.getStringSet(KEY_PAGE_IDS, null) ?: return emptyList()
@@ -237,6 +243,84 @@ class LocalPageStore(context: Context) {
             }
         } catch (e: Exception) {
             Log.e("LocalPageStore", "Failed to delete page $pageId", e)
+        }
+    }
+
+    // --- Notebooks ---
+
+    fun loadNotebooks(): List<Notebook> {
+        if (!notebooksFile.exists()) return emptyList()
+        return try {
+            val json = notebooksFile.readText()
+            val arr = JSONArray(json)
+            (0 until arr.length()).map { i ->
+                val obj = arr.getJSONObject(i)
+                Notebook(
+                    id = obj.getString("id"),
+                    name = obj.getString("name"),
+                    createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                    color = if (obj.has("color") && !obj.isNull("color")) obj.getInt("color") else null
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("LocalPageStore", "Failed to load notebooks", e)
+            emptyList()
+        }
+    }
+
+    fun saveNotebooks(notebooks: List<Notebook>) {
+        try {
+            val arr = JSONArray()
+            notebooks.forEach { nb ->
+                arr.put(JSONObject().apply {
+                    put("id", nb.id)
+                    put("name", nb.name)
+                    put("createdAt", nb.createdAt)
+                    nb.color?.let { put("color", it) } ?: put("color", JSONObject.NULL)
+                })
+            }
+            notebooksFile.writeText(arr.toString())
+        } catch (e: Exception) {
+            Log.e("LocalPageStore", "Failed to save notebooks", e)
+        }
+    }
+
+    fun loadNotebookIdForPage(pageId: String): String? {
+        val map = loadAllPageNotebookAssignments()
+        return map[pageId]
+    }
+
+    fun loadAllPageNotebookAssignments(): Map<String, String> {
+        if (!assignmentsFile.exists()) return emptyMap()
+        return try {
+            val json = assignmentsFile.readText()
+            val obj = JSONObject(json)
+            obj.keys().asSequence().associateWith { obj.getString(it) }
+        } catch (e: Exception) {
+            Log.e("LocalPageStore", "Failed to load notebook assignments", e)
+            emptyMap()
+        }
+    }
+
+    fun savePageNotebook(pageId: String, notebookId: String?) {
+        val map = loadAllPageNotebookAssignments().toMutableMap()
+        if (notebookId != null) {
+            map[pageId] = notebookId
+        } else {
+            map.remove(pageId)
+        }
+        saveAllPageNotebookAssignments(map)
+    }
+
+    fun saveAllPageNotebookAssignments(assignments: Map<String, String>) {
+        try {
+            val obj = JSONObject()
+            assignments.forEach { (pageId, notebookId) ->
+                obj.put(pageId, notebookId)
+            }
+            assignmentsFile.writeText(obj.toString())
+        } catch (e: Exception) {
+            Log.e("LocalPageStore", "Failed to save notebook assignments", e)
         }
     }
 }

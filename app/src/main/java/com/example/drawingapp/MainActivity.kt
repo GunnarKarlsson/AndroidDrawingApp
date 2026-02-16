@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -27,6 +30,10 @@ import com.example.drawingapp.data.S3BackupRepository
 import com.example.drawingapp.ui.drawing.DrawingScreen
 import com.example.drawingapp.util.exportDrawingAsPng
 import com.example.drawingapp.util.shareUri
+import com.example.drawingapp.data.Notebook
+import com.example.drawingapp.ui.notebooklist.CreateNotebookDialog
+import com.example.drawingapp.ui.notebooklist.NotebookListScreen
+import com.example.drawingapp.ui.notebooklist.NotebookPagesScreen
 import com.example.drawingapp.ui.pagelist.PageListScreen
 import com.example.drawingapp.ui.settings.SettingsScreen
 import com.example.drawingapp.ui.theme.ExampleDrawingAppTheme
@@ -46,37 +53,89 @@ class MainActivity : ComponentActivity() {
                     val repo = remember { PageRepository(localStore) }
                     val s3Backup = remember { S3BackupRepository(appContext, localStore) }
                     val pages = remember { mutableStateListOf<Page>() }
+                    val notebooks = remember { mutableStateListOf<Notebook>() }
+                    var showCreateNotebookDialog by remember { mutableStateOf(false) }
                     LaunchedEffect(Unit) {
                         repo.loadPages()
                         pages.clear()
                         pages.addAll(repo.pages)
+                        notebooks.clear()
+                        notebooks.addAll(repo.getNotebooks())
                     }
 
                     val navController = rememberNavController()
 
+                    if (showCreateNotebookDialog) {
+                        CreateNotebookDialog(
+                            onConfirm = { name ->
+                                val nb = repo.createNotebook(name)
+                                notebooks.clear()
+                                notebooks.addAll(repo.getNotebooks())
+                                showCreateNotebookDialog = false
+                            },
+                            onDismiss = { showCreateNotebookDialog = false }
+                        )
+                    }
+
                     NavHost(
                         navController = navController,
-                        startDestination = "pagelist"
+                        startDestination = "notebooklist"
                     ) {
-                        composable("pagelist") {
-                            PageListScreen(
-                                pages = pages,
+                        composable("notebooklist") {
+                            NotebookListScreen(
+                                notebooks = notebooks,
+                                onCreateNotebook = { showCreateNotebookDialog = true },
+                                onNotebookClick = { notebook ->
+                                    navController.navigate("notebook/${notebook.id}")
+                                },
+                                onDeleteNotebook = { notebook ->
+                                    repo.deleteNotebook(notebook.id)
+                                    notebooks.clear()
+                                    notebooks.addAll(repo.getNotebooks())
+                                },
+                                onSettingsClick = { navController.navigate("settings") }
+                            )
+                        }
+                        composable(
+                            route = "notebook/{notebookId}",
+                            arguments = listOf(navArgument("notebookId") { type = NavType.StringType })
+                        ) { backStackEntry ->
+                            val notebookId = backStackEntry.arguments?.getString("notebookId") ?: return@composable
+                            val notebookName = notebooks.find { it.id == notebookId }?.name ?: "Notebook"
+                            val pagesInNotebook = remember { mutableStateListOf<Page>() }
+                            LaunchedEffect(notebookId) {
+                                pagesInNotebook.clear()
+                                pagesInNotebook.addAll(repo.getPagesForNotebook(notebookId))
+                            }
+                            NotebookPagesScreen(
+                                notebookName = notebookName,
+                                pages = pagesInNotebook,
+                                notebooks = notebooks,
+                                currentNotebookId = notebookId,
                                 onAddPage = {
                                     val page = repo.addPage()
+                                    repo.assignPageToNotebook(page.id, notebookId)
                                     pages.clear()
                                     pages.addAll(repo.pages)
+                                    pagesInNotebook.clear()
+                                    pagesInNotebook.addAll(repo.getPagesForNotebook(notebookId))
                                     navController.navigate("drawing/${page.id}")
                                 },
-                                onPageClick = { page ->
-                                    navController.navigate("drawing/${page.id}")
-                                },
+                                onPageClick = { page -> navController.navigate("drawing/${page.id}") },
                                 onDeletePage = { page ->
                                     repo.deletePage(page.id)
                                     pages.clear()
                                     pages.addAll(repo.pages)
+                                    pagesInNotebook.clear()
+                                    pagesInNotebook.addAll(repo.getPagesForNotebook(notebookId))
+                                },
+                                onMovePages = { pageIds, targetNotebookId ->
+                                    repo.movePagesToNotebook(pageIds, targetNotebookId)
+                                    pagesInNotebook.clear()
+                                    pagesInNotebook.addAll(repo.getPagesForNotebook(notebookId))
                                 },
                                 onLoadThumbnail = { pageId -> withContext(Dispatchers.IO) { repo.loadPageThumbnail(pageId) } },
-                                onSettingsClick = { navController.navigate("settings") }
+                                onBack = { navController.popBackStack() }
                             )
                         }
                         composable("settings") {
@@ -88,6 +147,8 @@ class MainActivity : ComponentActivity() {
                                     repo.loadPages()
                                     pages.clear()
                                     pages.addAll(repo.pages)
+                                    notebooks.clear()
+                                    notebooks.addAll(repo.getNotebooks())
                                 }
                             )
                         }

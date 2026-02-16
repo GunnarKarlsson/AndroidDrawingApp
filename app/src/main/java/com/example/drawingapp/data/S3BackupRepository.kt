@@ -20,6 +20,8 @@ import java.util.UUID
 
 private const val USER_PREFIX = "users"
 private const val PAGE_IDS_KEY = "page_ids.txt"
+private const val NOTEBOOKS_KEY = "notebooks.json"
+private const val ASSIGNMENTS_KEY = "notebook_assignments.json"
 
 class S3BackupRepository(
     private val context: Context,
@@ -66,6 +68,18 @@ class S3BackupRepository(
                     }
                 }
             }
+            val notebooksFile = File(context.filesDir, NOTEBOOKS_KEY)
+            if (notebooksFile.exists()) {
+                val bytes = notebooksFile.readBytes()
+                val meta = ObjectMetadata().apply { contentLength = bytes.size.toLong() }
+                s3.putObject(bucketName, "$userPrefix/$NOTEBOOKS_KEY", ByteArrayInputStream(bytes), meta)
+            }
+            val assignmentsFile = File(context.filesDir, ASSIGNMENTS_KEY)
+            if (assignmentsFile.exists()) {
+                val bytes = assignmentsFile.readBytes()
+                val meta = ObjectMetadata().apply { contentLength = bytes.size.toLong() }
+                s3.putObject(bucketName, "$userPrefix/$ASSIGNMENTS_KEY", ByteArrayInputStream(bytes), meta)
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e("S3Backup", "Backup failed", e)
@@ -89,6 +103,8 @@ class S3BackupRepository(
             val listRequest = ListObjectsV2Request().withBucketName(bucketName).withPrefix("$userPrefix/")
             var result: ListObjectsV2Result?
             var pageIdsContent: String? = null
+            var notebooksContent: String? = null
+            var assignmentsContent: String? = null
             val pageFiles = mutableMapOf<String, MutableList<String>>()
             do {
                 result = s3.listObjectsV2(listRequest)
@@ -98,6 +114,14 @@ class S3BackupRepository(
                         key.endsWith(PAGE_IDS_KEY) -> {
                             val obj = s3.getObject(bucketName, key)
                             pageIdsContent = obj.objectContent.bufferedReader().readText()
+                        }
+                        key.endsWith(NOTEBOOKS_KEY) -> {
+                            val obj = s3.getObject(bucketName, key)
+                            notebooksContent = obj.objectContent.bufferedReader().readText()
+                        }
+                        key.endsWith(ASSIGNMENTS_KEY) -> {
+                            val obj = s3.getObject(bucketName, key)
+                            assignmentsContent = obj.objectContent.bufferedReader().readText()
                         }
                         key.contains("/pages/") -> {
                             val parts = key.removePrefix("$userPrefix/pages/").split("/", limit = 2)
@@ -110,6 +134,12 @@ class S3BackupRepository(
                 listRequest.continuationToken = result.nextContinuationToken
             } while (result?.isTruncated == true)
 
+            notebooksContent?.let { text ->
+                File(context.filesDir, NOTEBOOKS_KEY).writeText(text)
+            }
+            assignmentsContent?.let { text ->
+                File(context.filesDir, ASSIGNMENTS_KEY).writeText(text)
+            }
             pageIdsContent?.let { ids ->
                 val idsList = ids.lines().filter { it.isNotBlank() }
                 localStore.savePageIds(idsList)

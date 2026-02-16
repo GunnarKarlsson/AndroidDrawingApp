@@ -4,6 +4,9 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,6 +56,7 @@ import kotlinx.coroutines.withContext
 
 private val PAGE_LIST_BACKGROUND = Color(0xFF565563)
 private val PAGE_LIST_ICON_COLOR = Color(0xFFE1D8D5)
+private val SELECTION_BORDER_DP = 4.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -158,23 +162,36 @@ fun PageListScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PageCard(
+fun PageCard(
     page: Page,
     onLoadThumbnail: (suspend (String) -> Bitmap?)?,
     onClick: () -> Unit,
     onDelete: () -> Unit,
+    isSelected: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var thumbnail by remember(page.id) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(page.id) {
         thumbnail = onLoadThumbnail?.let { load -> withContext(Dispatchers.IO) { load(page.id) } }
     }
+    val cardModifier = if (onLongClick != null) {
+        Modifier.fillMaxWidth().aspectRatio(1f).combinedClickable(
+            onClick = onClick,
+            onLongClick = onLongClick
+        )
+    } else {
+        Modifier.fillMaxWidth().aspectRatio(1f).clickable(onClick = onClick)
+    }
     Card(
         modifier = modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .clickable(onClick = onClick),
+            .then(cardModifier)
+            .then(
+                if (isSelected) Modifier.border(SELECTION_BORDER_DP, Color(0xFF2196F3), RoundedCornerShape(4.dp))
+                else Modifier
+            ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {

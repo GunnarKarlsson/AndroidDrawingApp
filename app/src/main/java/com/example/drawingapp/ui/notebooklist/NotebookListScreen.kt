@@ -1,0 +1,269 @@
+package com.example.drawingapp.ui.notebooklist
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import com.example.drawingapp.R
+import com.example.drawingapp.data.Notebook
+
+private val NOTEBOOK_LIST_BACKGROUND = Color(0xFF565563)
+private val NOTEBOOK_LIST_ICON_COLOR = Color(0xFFE1D8D5)
+private val DEFAULT_NOTEBOOK_CARD_COLOR = Color(0xFF6B7B8C)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NotebookListScreen(
+    notebooks: List<Notebook>,
+    onCreateNotebook: () -> Unit,
+    onNotebookClick: (Notebook) -> Unit,
+    onDeleteNotebook: (Notebook) -> Unit,
+    onSettingsClick: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    var notebookToDelete by remember { mutableStateOf<Notebook?>(null) }
+
+    Scaffold(
+        modifier = modifier,
+        containerColor = NOTEBOOK_LIST_BACKGROUND,
+        topBar = {
+            TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = NOTEBOOK_LIST_BACKGROUND,
+                    titleContentColor = NOTEBOOK_LIST_ICON_COLOR,
+                    actionIconContentColor = NOTEBOOK_LIST_ICON_COLOR
+                ),
+                title = { Text("DrawApp", color = NOTEBOOK_LIST_ICON_COLOR) },
+                actions = {
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_settings),
+                            contentDescription = "Settings",
+                            tint = NOTEBOOK_LIST_ICON_COLOR
+                        )
+                    }
+                }
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onCreateNotebook,
+                containerColor = NOTEBOOK_LIST_ICON_COLOR,
+                contentColor = NOTEBOOK_LIST_BACKGROUND
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_add),
+                    contentDescription = "Add notebook"
+                )
+            }
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(NOTEBOOK_LIST_BACKGROUND)
+                .padding(paddingValues)
+        ) {
+            if (notebooks.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No notebooks",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = NOTEBOOK_LIST_ICON_COLOR
+                    )
+                }
+            } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                contentPadding = PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(notebooks, key = { it.id }) { notebook ->
+                    NotebookCard(
+                        notebook = notebook,
+                        onClick = { onNotebookClick(notebook) },
+                        onDelete = { if (notebook.id != Notebook.DEFAULT_ID) notebookToDelete = notebook }
+                    )
+                }
+            }
+            }
+        }
+
+        notebookToDelete?.let { notebook ->
+            AlertDialog(
+                onDismissRequest = { notebookToDelete = null },
+                containerColor = NOTEBOOK_LIST_BACKGROUND,
+                titleContentColor = NOTEBOOK_LIST_ICON_COLOR,
+                textContentColor = NOTEBOOK_LIST_ICON_COLOR,
+                shape = RoundedCornerShape(0.dp),
+                title = { Text("Delete Notebook", color = NOTEBOOK_LIST_ICON_COLOR) },
+                text = {
+                    Text(
+                        "Are you sure? Pages in this notebook will be moved to All Pages.",
+                        color = NOTEBOOK_LIST_ICON_COLOR
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            onDeleteNotebook(notebook)
+                            notebookToDelete = null
+                        }
+                    ) {
+                        Text("Confirm", color = NOTEBOOK_LIST_ICON_COLOR)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { notebookToDelete = null }) {
+                        Text("Cancel", color = NOTEBOOK_LIST_ICON_COLOR)
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun NotebookCard(
+    notebook: Notebook,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cardColor = notebook.color?.let { Color(it) } ?: DEFAULT_NOTEBOOK_CARD_COLOR
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+            .clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = cardColor)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.List,
+                    contentDescription = null,
+                    tint = NOTEBOOK_LIST_ICON_COLOR,
+                    modifier = Modifier.size(48.dp)
+                )
+                Text(
+                    text = notebook.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = NOTEBOOK_LIST_ICON_COLOR
+                )
+            }
+            if (notebook.id != Notebook.DEFAULT_ID) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                        .size(32.dp)
+                        .background(
+                            color = Color.White,
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                        .clickable(onClick = onDelete),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete ${notebook.name}",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CreateNotebookDialog(
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = NOTEBOOK_LIST_BACKGROUND,
+        titleContentColor = NOTEBOOK_LIST_ICON_COLOR,
+        textContentColor = NOTEBOOK_LIST_ICON_COLOR,
+        shape = RoundedCornerShape(0.dp),
+        title = { Text("New Notebook", color = NOTEBOOK_LIST_ICON_COLOR) },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Name", color = NOTEBOOK_LIST_ICON_COLOR) },
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val trimmed = name.trim()
+                    if (trimmed.isNotBlank()) {
+                        onConfirm(trimmed)
+                    }
+                }
+            ) {
+                Text("Create", color = NOTEBOOK_LIST_ICON_COLOR)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = NOTEBOOK_LIST_ICON_COLOR)
+            }
+        }
+    )
+}
