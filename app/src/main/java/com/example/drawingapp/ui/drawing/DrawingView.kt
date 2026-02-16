@@ -134,6 +134,24 @@ class DrawingView @JvmOverloads constructor(
             }
         }
 
+    /** When true, show preview dot on touch down (for Pen, Pencil, MarkerPen, Eraser). */
+    var enableDotPreview: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
+    /** Temporary preview dot position in bitmap space (shown during press if not dragging). */
+    private var previewDotPosition: Offset? = null
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
     /** Called when a stroke is finished (points in bitmap space, strokeWidth in bitmap pixels so zoomed-in strokes are thinner). */
     var onStrokeDrawn: ((List<Offset>, strokeWidthBitmap: Float) -> Unit)? = null
 
@@ -191,6 +209,7 @@ class DrawingView @JvmOverloads constructor(
 
             override fun onScaleEnd(detector: ScaleGestureDetector) {
                 isScaling = false
+                previewDotPosition = null
                 lastAvgX = detector.focusX
                 lastAvgY = detector.focusY
             }
@@ -260,6 +279,21 @@ class DrawingView @JvmOverloads constructor(
             }
             canvas.drawPath(path, strokePreviewPaint)
         }
+        // Preview dot while finger is down (only if not dragging yet)
+        if (enableDotPreview) {
+            previewDotPosition?.let { pos ->
+                val paint = Paint().apply {
+                    isAntiAlias = true
+                    color = strokePreviewColor
+                    style = Paint.Style.FILL
+                    alpha = if (strokePreviewIsEraser) 128 else 255
+                }
+                val dotRadiusScreen = strokePreviewWidth / 2f
+                val screenX = panX + scale * pos.x
+                val screenY = panY + scale * pos.y
+                canvas.drawCircle(screenX, screenY, dotRadiusScreen, paint)
+            }
+        }
         // Layers above current
         for (i in (currentIdx + 1) until n) {
             if (i in layers.indices && (i >= transparent.size || !transparent[i])) {
@@ -318,10 +352,14 @@ class DrawingView @JvmOverloads constructor(
                 isDrag = false
                 isGesturePanning = false
                 isScaling = false
+                if (enableDotPreview) {
+                    previewDotPosition = screenToBitmap(sx, sy)
+                }
                 return true
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
                 if (event.pointerCount > 1) {
+                    previewDotPosition = null
                     isGesturePanning = true
                     if (!isPanning && dragPoints.isNotEmpty()) {
                         dragPoints.clear()
@@ -342,6 +380,7 @@ class DrawingView @JvmOverloads constructor(
             MotionEvent.ACTION_MOVE -> {
                 if (isScaling) return true
                 if (event.pointerCount > 1) {
+                    previewDotPosition = null
                     var sumX = 0f
                     var sumY = 0f
                     for (i in 0 until event.pointerCount) {
@@ -361,6 +400,7 @@ class DrawingView @JvmOverloads constructor(
                     return true
                 } else if (event.pointerCount == 1) {
                     if (isGesturePanning || isPanning) {
+                        previewDotPosition = null
                         val dx = event.x - lastMoveX
                         val dy = event.y - lastMoveY
                         panX += dx
@@ -370,10 +410,14 @@ class DrawingView @JvmOverloads constructor(
                         lastMoveX = event.x
                         lastMoveY = event.y
                     } else {
-                        val pt = screenToBitmap(event.x, event.y)
-                        dragPoints.add(pt)
+                        val currentPt = screenToBitmap(event.x, event.y)
+                        dragPoints.add(currentPt)
                         if (!isDrag && (event.x - touchStartX).let { dx -> (event.y - touchStartY).let { dy -> dx * dx + dy * dy > tapSlopPx * tapSlopPx } }) {
                             isDrag = true
+                            previewDotPosition = null
+                        }
+                        if (!isDrag && enableDotPreview) {
+                            previewDotPosition = currentPt
                         }
                         currentStrokePoints = dragPoints.toList()
                     }
@@ -411,6 +455,7 @@ class DrawingView @JvmOverloads constructor(
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                previewDotPosition = null
                 if (!isGesturePanning && !isPanning && !isScaling) {
                     if (isDrag && dragPoints.size >= 2) {
                         val widthInBitmap = strokePreviewWidth / scale

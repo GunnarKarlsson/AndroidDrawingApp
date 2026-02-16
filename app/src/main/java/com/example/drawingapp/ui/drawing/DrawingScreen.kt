@@ -603,6 +603,7 @@ fun DrawingScreen(
                         view.strokePreviewWidth = strokeWidth
                         view.strokePreviewCapRound = (strokeCapStyle == StrokeCapStyle.ROUND)
                         view.strokePreviewIsEraser = (selectedTool == DrawTool.Eraser)
+                        view.enableDotPreview = (selectedTool in listOf(DrawTool.Pen, DrawTool.Pencil, DrawTool.MarkerPen, DrawTool.Eraser))
                         view.onStrokeDrawn = { points, strokeWidthBitmap ->
                             if (currentLayerIndex in layerStates.indices && points.size > 1) {
                                 val pointsToUse = if (curveSmoothingEnabled) smoothStrokePoints(points) else points
@@ -661,6 +662,34 @@ fun DrawingScreen(
                                         layer.hasFill = true
                                         redoStack.clear()
                                         undoStack.add(UndoEntry.Fill(currentLayerIndex, bitmapCopy))
+                                        saveAllLayers()
+                                        canvasRefreshTrigger++
+                                    }
+                                }
+                                DrawTool.Pen, DrawTool.Pencil, DrawTool.MarkerPen, DrawTool.Eraser -> {
+                                    if (currentLayerIndex in layerStates.indices) {
+                                        val layer = layerStates[currentLayerIndex]
+                                        val dotRadiusBitmap = ((strokeSizePx / view.scale) / 2f).coerceAtLeast(1.5f)
+                                        val dotColor = when (selectedTool) {
+                                            DrawTool.Pen -> selectedColor
+                                            DrawTool.Pencil -> selectedColor.copy(alpha = PENCIL_ALPHA)
+                                            DrawTool.MarkerPen -> selectedColor.copy(alpha = 0.6f)
+                                            DrawTool.Eraser -> Color.Transparent
+                                            else -> selectedColor
+                                        }
+                                        val bitmapBefore = Bitmap.createBitmap(layer.bitmap)
+                                        val canvas = android.graphics.Canvas(layer.bitmap)
+                                        val paint = Paint().apply {
+                                            isAntiAlias = true
+                                            color = dotColor.toArgb()
+                                            style = Paint.Style.FILL
+                                            if (selectedTool == DrawTool.Eraser) {
+                                                xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+                                            }
+                                        }
+                                        canvas.drawCircle(bx, by, dotRadiusBitmap, paint)
+                                        undoStack.add(UndoEntry.Fill(currentLayerIndex, bitmapBefore))
+                                        redoStack.clear()
                                         saveAllLayers()
                                         canvasRefreshTrigger++
                                     }
