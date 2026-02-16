@@ -88,6 +88,11 @@ class MainActivity : ComponentActivity() {
                                 onNotebookClick = { notebook ->
                                     navController.navigate("notebook/${notebook.id}")
                                 },
+                                onRenameNotebook = { notebook, newName ->
+                                    repo.renameNotebook(notebook.id, newName)
+                                    notebooks.clear()
+                                    notebooks.addAll(repo.getNotebooks())
+                                },
                                 onDeleteNotebook = { notebook ->
                                     repo.deleteNotebook(notebook.id)
                                     notebooks.clear()

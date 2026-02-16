@@ -112,6 +112,15 @@ class PageRepository(private val store: LocalPageStore) {
         return nb
     }
 
+    fun renameNotebook(notebookId: String, newName: String) {
+        val trimmed = newName.trim()
+        if (trimmed.isBlank()) return
+        val list = store.loadNotebooks().map { nb ->
+            if (nb.id == notebookId) nb.copy(name = trimmed) else nb
+        }
+        store.saveNotebooks(list)
+    }
+
     fun deleteNotebook(notebookId: String) {
         if (notebookId == Notebook.DEFAULT_ID) return
         val list = store.loadNotebooks().filter { it.id != notebookId }

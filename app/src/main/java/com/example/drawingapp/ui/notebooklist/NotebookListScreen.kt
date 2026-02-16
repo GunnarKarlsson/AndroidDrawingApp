@@ -1,7 +1,9 @@
 package com.example.drawingapp.ui.notebooklist
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,17 +51,19 @@ private val NOTEBOOK_LIST_BACKGROUND = Color(0xFF565563)
 private val NOTEBOOK_LIST_ICON_COLOR = Color(0xFFE1D8D5)
 private val DEFAULT_NOTEBOOK_CARD_COLOR = Color(0xFF6B7B8C)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun NotebookListScreen(
     notebooks: List<Notebook>,
     onCreateNotebook: () -> Unit,
     onNotebookClick: (Notebook) -> Unit,
+    onRenameNotebook: (Notebook, String) -> Unit,
     onDeleteNotebook: (Notebook) -> Unit,
     onSettingsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var notebookToDelete by remember { mutableStateOf<Notebook?>(null) }
+    var notebookToRename by remember { mutableStateOf<Notebook?>(null) }
 
     Scaffold(
         modifier = modifier,
@@ -125,6 +129,7 @@ fun NotebookListScreen(
                     NotebookCard(
                         notebook = notebook,
                         onClick = { onNotebookClick(notebook) },
+                        onLongClick = { notebookToRename = notebook },
                         onDelete = { if (notebook.id != Notebook.DEFAULT_ID) notebookToDelete = notebook }
                     )
                 }
@@ -163,13 +168,26 @@ fun NotebookListScreen(
                 }
             )
         }
+
+        notebookToRename?.let { notebook ->
+            RenameNotebookDialog(
+                notebook = notebook,
+                onConfirm = { newName ->
+                    onRenameNotebook(notebook, newName)
+                    notebookToRename = null
+                },
+                onDismiss = { notebookToRename = null }
+            )
+        }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NotebookCard(
     notebook: Notebook,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -178,7 +196,10 @@ fun NotebookCard(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = cardColor)
     ) {
@@ -245,7 +266,8 @@ fun CreateNotebookDialog(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Name", color = NOTEBOOK_LIST_ICON_COLOR) },
-                singleLine = true
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White)
             )
         },
         confirmButton = {
@@ -258,6 +280,49 @@ fun CreateNotebookDialog(
                 }
             ) {
                 Text("Create", color = NOTEBOOK_LIST_ICON_COLOR)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = NOTEBOOK_LIST_ICON_COLOR)
+            }
+        }
+    )
+}
+
+@Composable
+fun RenameNotebookDialog(
+    notebook: Notebook,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember(notebook.id) { mutableStateOf(notebook.name) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = NOTEBOOK_LIST_BACKGROUND,
+        titleContentColor = NOTEBOOK_LIST_ICON_COLOR,
+        textContentColor = NOTEBOOK_LIST_ICON_COLOR,
+        shape = RoundedCornerShape(0.dp),
+        title = { Text("Rename Notebook", color = NOTEBOOK_LIST_ICON_COLOR) },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Name", color = NOTEBOOK_LIST_ICON_COLOR) },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White)
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val trimmed = name.trim()
+                    if (trimmed.isNotBlank()) {
+                        onConfirm(trimmed)
+                    }
+                }
+            ) {
+                Text("Rename", color = NOTEBOOK_LIST_ICON_COLOR)
             }
         },
         dismissButton = {
