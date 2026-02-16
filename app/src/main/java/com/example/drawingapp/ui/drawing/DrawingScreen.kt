@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -181,7 +183,7 @@ private fun colorToHsvValue(color: androidx.compose.ui.graphics.Color): Float {
     return hsv[2]
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun DrawingScreen(
     pageId: String,
@@ -814,11 +816,10 @@ fun DrawingScreen(
                     modifier = Modifier.verticalScroll(rememberScrollState())
                 ) {
                     Text("Favorites", style = MaterialTheme.typography.titleSmall, color = HEADER_ICON_COLOR)
-                    Row(
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         favoriteColorsArgb.forEach { argb ->
                             Box(
