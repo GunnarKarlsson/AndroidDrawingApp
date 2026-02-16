@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -96,6 +97,7 @@ import java.io.ByteArrayOutputStream
 
 private const val PENCIL_ALPHA = 0.75f
 private const val CLOSE_THRESHOLD_PX = 50f
+private const val MIN_STROKE_SEGMENT_PX = 0.5f
 private val STROKE_SIZE_RANGE = 1f..64f
 private const val DEFAULT_STROKE_SIZE_PX = 20f // ~30% into 1..64
 private val DEFAULT_COLOR = Color.Black
@@ -935,9 +937,22 @@ private fun drawStrokeOnBitmap(bitmap: Bitmap?, stroke: Stroke) {
         }
     }
     val path = android.graphics.Path()
+    var lastX = 0f
+    var lastY = 0f
     stroke.points.forEachIndexed { index, offset ->
-        if (index == 0) path.moveTo(offset.x, offset.y)
-        else path.lineTo(offset.x, offset.y)
+        if (index == 0) {
+            path.moveTo(offset.x, offset.y)
+            lastX = offset.x
+            lastY = offset.y
+        } else {
+            val dx = offset.x - lastX
+            val dy = offset.y - lastY
+            if (hypot(dx, dy) >= MIN_STROKE_SEGMENT_PX) {
+                path.lineTo(offset.x, offset.y)
+                lastX = offset.x
+                lastY = offset.y
+            }
+        }
     }
     if (stroke.closed && stroke.points.isNotEmpty()) {
         val start = stroke.points.first()
