@@ -886,7 +886,10 @@ fun DrawingScreen(
                                 .build()
                             picker.attachBrightnessSlider(brightnessBar)
                             column.addView(picker, ViewGroup.LayoutParams(wheelSizePx, wheelSizePx))
-                            column.addView(brightnessBar, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, sliderHeightPx))
+                            val sliderParams = android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, sliderHeightPx).apply {
+                                topMargin = (8 * density).toInt()
+                            }
+                            column.addView(brightnessBar, sliderParams)
                             column
                         },
                         modifier = Modifier.size(280.dp, 320.dp),
@@ -922,6 +925,7 @@ fun DrawingScreen(
                         )
                     }
                     TextButton(
+                        modifier = Modifier.border(1.dp, Color.White, RoundedCornerShape(4.dp)),
                         onClick = {
                             val argb = pendingColor.toArgb()
                             if (argb !in favoriteColorsArgb) {
@@ -933,18 +937,24 @@ fun DrawingScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    selectedColor = pendingColor
-                    onConfirmStrokeColor(pendingColor)
-                    showColorPickerModal = false
-                    favoriteToDeleteArgb = null
-                }) { Text("Confirm", color = HEADER_ICON_COLOR) }
+                TextButton(
+                    modifier = Modifier.border(1.dp, Color.White, RoundedCornerShape(4.dp)),
+                    onClick = {
+                        selectedColor = pendingColor
+                        onConfirmStrokeColor(pendingColor)
+                        showColorPickerModal = false
+                        favoriteToDeleteArgb = null
+                    }
+                ) { Text("Confirm", color = HEADER_ICON_COLOR) }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    showColorPickerModal = false
-                    favoriteToDeleteArgb = null
-                }) { Text("Cancel", color = HEADER_ICON_COLOR) }
+                TextButton(
+                    modifier = Modifier.border(1.dp, Color.White, RoundedCornerShape(4.dp)),
+                    onClick = {
+                        showColorPickerModal = false
+                        favoriteToDeleteArgb = null
+                    }
+                ) { Text("Cancel", color = HEADER_ICON_COLOR) }
             }
         )
     }
