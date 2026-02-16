@@ -196,6 +196,8 @@ class MainActivity : ComponentActivity() {
                                 onSaveCurveSmoothing = { repo.saveCurveSmoothing(it) },
                                 initialCurveClosingEnabled = remember { repo.loadCurveClosing(false) },
                                 onSaveCurveClosing = { repo.saveCurveClosing(it) },
+                                loadFavoriteColors = { repo.loadFavoriteColorsArgb() },
+                                saveFavoriteColors = { repo.saveFavoriteColorsArgb(it) },
                                 onHomeClick = { navController.popBackStack() },
                                 onExitPage = { pageId -> lifecycleScope.launch(Dispatchers.IO) { repo.generateThumbnailIfNeeded(pageId) } }
                             )

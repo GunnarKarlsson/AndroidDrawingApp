@@ -91,6 +91,12 @@ class PageRepository(private val store: LocalPageStore) {
         store.saveCurveClosing(value)
     }
 
+    fun loadFavoriteColorsArgb(): List<Int> = store.loadFavoriteColorsArgb()
+
+    fun saveFavoriteColorsArgb(list: List<Int>) {
+        store.saveFavoriteColorsArgb(list)
+    }
+
     fun deletePage(pageId: String) {
         _pages.removeAll { it.id == pageId }
         _assignments.remove(pageId)

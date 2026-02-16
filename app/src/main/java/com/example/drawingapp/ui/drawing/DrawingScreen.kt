@@ -14,6 +14,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
@@ -57,6 +59,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
@@ -178,7 +181,7 @@ private fun colorToHsvValue(color: androidx.compose.ui.graphics.Color): Float {
     return hsv[2]
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DrawingScreen(
     pageId: String,
@@ -198,6 +201,8 @@ fun DrawingScreen(
     onSaveCurveSmoothing: (Boolean) -> Unit = {},
     initialCurveClosingEnabled: Boolean = false,
     onSaveCurveClosing: (Boolean) -> Unit = {},
+    loadFavoriteColors: () -> List<Int> = { listOf(Color.Black.toArgb(), Color.White.toArgb()) },
+    saveFavoriteColors: (List<Int>) -> Unit = {},
     onHomeClick: () -> Unit = {},
     onExitPage: (String) -> Unit = {},
     modifier: Modifier = Modifier
@@ -212,6 +217,14 @@ fun DrawingScreen(
     var selectedColor by remember(initialStrokeColor) { mutableStateOf(initialStrokeColor) }
     var showColorPickerModal by remember { mutableStateOf(false) }
     var pendingColor by remember { mutableStateOf(selectedColor) }
+    val favoriteColorsArgb = remember { mutableStateListOf<Int>() }
+    var favoriteToDeleteArgb by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(showColorPickerModal) {
+        if (showColorPickerModal) {
+            favoriteColorsArgb.clear()
+            favoriteColorsArgb.addAll(loadFavoriteColors())
+        }
+    }
     var strokeSizePx by remember(initialStrokeSizePx) {
         mutableStateOf(initialStrokeSizePx.coerceIn(STROKE_SIZE_RANGE))
     }
@@ -786,14 +799,44 @@ fun DrawingScreen(
         val context = LocalContext.current
         val lifecycleOwner = (context as? Activity) as? LifecycleOwner
         AlertDialog(
-            onDismissRequest = { showColorPickerModal = false },
+            onDismissRequest = {
+                showColorPickerModal = false
+                favoriteToDeleteArgb = null
+            },
             containerColor = HEADER_BACKGROUND,
             titleContentColor = HEADER_ICON_COLOR,
             textContentColor = HEADER_ICON_COLOR,
             shape = RoundedCornerShape(0.dp),
-            title = { Text("Stroke color", color = HEADER_ICON_COLOR) },
+            title = null,
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
+                    Text("Favorites", style = MaterialTheme.typography.titleSmall, color = HEADER_ICON_COLOR)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                    ) {
+                        favoriteColorsArgb.forEach { argb ->
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(Color(argb), CircleShape)
+                                    .border(
+                                        2.dp,
+                                        if (argb == pendingColor.toArgb()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                        CircleShape
+                                    )
+                                    .combinedClickable(
+                                        onClick = { pendingColor = Color(argb) },
+                                        onLongClick = { favoriteToDeleteArgb = argb }
+                                    )
+                            )
+                        }
+                    }
                     Text("Presets", style = MaterialTheme.typography.titleSmall, color = HEADER_ICON_COLOR)
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -878,6 +921,15 @@ fun DrawingScreen(
                                 .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
                         )
                     }
+                    TextButton(
+                        onClick = {
+                            val argb = pendingColor.toArgb()
+                            if (argb !in favoriteColorsArgb) {
+                                favoriteColorsArgb.add(argb)
+                                saveFavoriteColors(favoriteColorsArgb.toList())
+                            }
+                        }
+                    ) { Text("Add to favorites", color = HEADER_ICON_COLOR) }
                 }
             },
             confirmButton = {
@@ -885,10 +937,33 @@ fun DrawingScreen(
                     selectedColor = pendingColor
                     onConfirmStrokeColor(pendingColor)
                     showColorPickerModal = false
+                    favoriteToDeleteArgb = null
                 }) { Text("Confirm", color = HEADER_ICON_COLOR) }
             },
             dismissButton = {
-                TextButton(onClick = { showColorPickerModal = false }) { Text("Cancel", color = HEADER_ICON_COLOR) }
+                TextButton(onClick = {
+                    showColorPickerModal = false
+                    favoriteToDeleteArgb = null
+                }) { Text("Cancel", color = HEADER_ICON_COLOR) }
+            }
+        )
+    }
+    favoriteToDeleteArgb?.let { argb ->
+        AlertDialog(
+            onDismissRequest = { favoriteToDeleteArgb = null },
+            containerColor = HEADER_BACKGROUND,
+            titleContentColor = HEADER_ICON_COLOR,
+            textContentColor = HEADER_ICON_COLOR,
+            title = { Text("Remove from favorites?", color = HEADER_ICON_COLOR) },
+            confirmButton = {
+                TextButton(onClick = {
+                    favoriteColorsArgb.remove(argb)
+                    saveFavoriteColors(favoriteColorsArgb.toList())
+                    favoriteToDeleteArgb = null
+                }) { Text("Delete", color = HEADER_ICON_COLOR) }
+            },
+            dismissButton = {
+                TextButton(onClick = { favoriteToDeleteArgb = null }) { Text("Cancel", color = HEADER_ICON_COLOR) }
             }
         )
     }

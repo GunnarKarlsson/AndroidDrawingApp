@@ -22,6 +22,7 @@ private const val KEY_STROKE_COLOR_ARGB = "stroke_color_argb"
 private const val KEY_STROKE_CAP = "stroke_cap" // 0 = ROUND, 1 = BUTT
 private const val KEY_CURVE_SMOOTHING = "curve_smoothing"
 private const val KEY_CURVE_CLOSING = "curve_closing"
+private const val KEY_FAVORITE_COLORS = "favorite_colors"
 private const val PAGES_DIR = "pages"
 private const val META_FILE = "meta.json"
 private const val THUMBNAIL_FILE = "thumbnail.png"
@@ -81,6 +82,18 @@ class LocalPageStore(context: Context) {
 
     fun saveCurveClosing(value: Boolean) {
         prefs.edit().putBoolean(KEY_CURVE_CLOSING, value).apply()
+    }
+
+    private val defaultFavoriteColorsArgb = listOf(-16777216, -1) // black, white
+
+    fun loadFavoriteColorsArgb(): List<Int> {
+        val raw = prefs.getString(KEY_FAVORITE_COLORS, null) ?: return defaultFavoriteColorsArgb
+        val list = raw.split(",").mapNotNull { it.trim().toIntOrNull() }.distinct()
+        return if (list.isEmpty()) defaultFavoriteColorsArgb else list
+    }
+
+    fun saveFavoriteColorsArgb(list: List<Int>) {
+        prefs.edit().putString(KEY_FAVORITE_COLORS, list.joinToString(",")).apply()
     }
 
     /** Legacy: load single bitmap (first layer or old pageId.png). */
