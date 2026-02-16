@@ -25,7 +25,6 @@ import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -384,7 +383,7 @@ fun NotebookCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.List,
+                        painter = painterResource(R.drawable.ic_notebook),
                         contentDescription = null,
                         tint = NOTEBOOK_LIST_ICON_COLOR,
                         modifier = Modifier.size(48.dp)
