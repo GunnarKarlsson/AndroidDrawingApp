@@ -221,8 +221,7 @@ fun NotebookPreviewCollage(
                     bitmap = images[0].asImageBitmap(),
                     contentDescription = null,
                     modifier = Modifier
-                        .fillMaxSize(0.8f)
-                        .align(Alignment.TopStart)
+                        .fillMaxSize()
                         .clip(RoundedCornerShape(8.dp)),
                     contentScale = ContentScale.Crop
                 )
