@@ -42,6 +42,15 @@ class DrawingView @JvmOverloads constructor(
             }
         }
 
+    /** For each layer, true if the layer is hidden (visibility toggle). */
+    var layerHidden: List<Boolean> = emptyList()
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
     /** Index of the current layer (drawn in order with others; used for stroke preview ordering). */
     var currentLayerIndex: Int = 0
         set(value) {
@@ -239,6 +248,7 @@ class DrawingView @JvmOverloads constructor(
 
         val layers = layerBitmaps
         val transparent = layerTransparent
+        val hidden = layerHidden
         if (layers.isEmpty()) return
 
         matrix.reset()
@@ -247,19 +257,25 @@ class DrawingView @JvmOverloads constructor(
 
         val n = layers.size
         val currentIdx = currentLayerIndex.coerceIn(0, n - 1)
+        val isCurrentLayerHidden = currentIdx in hidden.indices && hidden[currentIdx]
 
         // Layers below current
         for (i in 0 until currentIdx) {
-            if (i in layers.indices && (i >= transparent.size || !transparent[i])) {
+            if (i in layers.indices && 
+                (i >= transparent.size || !transparent[i]) &&
+                (i >= hidden.size || !hidden[i])) {
                 layers[i].let { bmp -> canvas.drawBitmap(bmp, matrix, null) }
             }
         }
         // Current layer bitmap
-        if (currentIdx in layers.indices && (currentIdx >= transparent.size || !transparent[currentIdx])) {
+        if (currentIdx in layers.indices && 
+            (currentIdx >= transparent.size || !transparent[currentIdx]) &&
+            (currentIdx >= hidden.size || !hidden[currentIdx])) {
             canvas.drawBitmap(layers[currentIdx], matrix, null)
         }
         // Current stroke preview in screen space (above current layer, below layers above)
-        if (currentStrokePoints.isNotEmpty()) {
+        // Skip preview if current layer is hidden
+        if (currentStrokePoints.isNotEmpty() && !isCurrentLayerHidden) {
             path.rewind()
             currentStrokePoints.forEachIndexed { index, o ->
                 val sx = panX + scale * o.x
@@ -280,7 +296,8 @@ class DrawingView @JvmOverloads constructor(
             canvas.drawPath(path, strokePreviewPaint)
         }
         // Preview dot while finger is down (only if not dragging yet)
-        if (enableDotPreview) {
+        // Skip preview dot if current layer is hidden
+        if (enableDotPreview && !isCurrentLayerHidden) {
             previewDotPosition?.let { pos ->
                 val paint = Paint().apply {
                     isAntiAlias = true
@@ -306,7 +323,9 @@ class DrawingView @JvmOverloads constructor(
         }
         // Layers above current
         for (i in (currentIdx + 1) until n) {
-            if (i in layers.indices && (i >= transparent.size || !transparent[i])) {
+            if (i in layers.indices && 
+                (i >= transparent.size || !transparent[i]) &&
+                (i >= hidden.size || !hidden[i])) {
                 layers[i].let { bmp -> canvas.drawBitmap(bmp, matrix, null) }
             }
         }

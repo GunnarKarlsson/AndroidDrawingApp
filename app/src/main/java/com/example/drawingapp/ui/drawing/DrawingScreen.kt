@@ -350,7 +350,7 @@ fun DrawingScreen(
         out.eraseColor(backgroundColor)
         val canvas = android.graphics.Canvas(out)
         layerStates.forEach { layer ->
-            if (!layer.isTransparent()) {
+            if (!layer.isTransparent() && !layer.isHidden) {
                 canvas.drawBitmap(layer.bitmap, 0f, 0f, null)
             }
         }
@@ -624,6 +624,7 @@ fun DrawingScreen(
                         drawingViewRef = view
                         view.layerBitmaps = layerStates.map { it.bitmap }
                         view.layerTransparent = layerStates.map { it.isTransparent() }
+                        view.layerHidden = layerStates.map { it.isHidden }
                         view.currentLayerIndex = currentLayerIndex
                         view.canvasBackgroundColor = backgroundColor
                         view.isPanning = (selectedTool == DrawTool.Pan)
@@ -1375,12 +1376,15 @@ private fun LayerManagerDialog(
                                             .clip(RoundedCornerShape(4.dp))
                                     )
                                 }
-                                Image(
-                                    bitmap = thumbnail.asImageBitmap(),
-                                    contentDescription = "Layer ${originalIndex + 1} preview",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Fit
-                                )
+                                // Only show thumbnail image if layer is not hidden
+                                if (!layer.isHidden) {
+                                    Image(
+                                        bitmap = thumbnail.asImageBitmap(),
+                                        contentDescription = "Layer ${originalIndex + 1} preview",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Fit
+                                    )
+                                }
                             }
                             
                             // Layer label

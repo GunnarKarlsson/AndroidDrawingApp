@@ -231,6 +231,7 @@ class LocalPageStore(context: Context) {
      */
     private fun buildCompositeThumbnail(pageId: String, maxSize: Int = 768): Bitmap? {
         val layers = loadPageLayers(pageId)
+        val layerMetas = loadPageLayerMetas(pageId)
         val bgColor = loadPageBackgroundColor(pageId)
         val firstLayer = layers.firstOrNull { it != null } ?: return null
         val width = firstLayer.width
@@ -245,8 +246,12 @@ class LocalPageStore(context: Context) {
         val srcRect = Rect(0, 0, width, height)
         val dstRect = Rect(0, 0, thumbWidth, thumbHeight)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-        layers.forEach { layer ->
-            layer?.let { canvas.drawBitmap(it, srcRect, dstRect, paint) }
+        layers.forEachIndexed { index, layer ->
+            // Skip hidden layers
+            val isHidden = layerMetas?.getOrNull(index)?.isHidden ?: false
+            if (!isHidden) {
+                layer?.let { canvas.drawBitmap(it, srcRect, dstRect, paint) }
+            }
         }
         return thumbnail
     }
