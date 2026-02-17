@@ -622,9 +622,14 @@ fun DrawingScreen(
                         },
                     update = { view ->
                         drawingViewRef = view
-                        view.layerBitmaps = layerStates.map { it.bitmap }
-                        view.layerTransparent = layerStates.map { it.isTransparent() }
-                        view.layerHidden = layerStates.map { it.isHidden }
+                        view.layers = layerStates.mapIndexed { index, layerState ->
+                            RenderLayer(
+                                bitmap = layerState.bitmap,
+                                isHidden = layerState.isHidden,
+                                isTransparent = layerState.isTransparent(),
+                                index = index
+                            )
+                        }
                         view.currentLayerIndex = currentLayerIndex
                         view.canvasBackgroundColor = backgroundColor
                         view.isPanning = (selectedTool == DrawTool.Pan)

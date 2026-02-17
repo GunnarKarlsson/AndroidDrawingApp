@@ -14,6 +14,16 @@ import android.view.View
 import androidx.compose.ui.geometry.Offset
 
 /**
+ * Represents a layer to be rendered with all its properties.
+ */
+data class RenderLayer(
+    val bitmap: Bitmap,
+    val isHidden: Boolean,
+    val isTransparent: Boolean,
+    val index: Int  // original index for current layer comparison
+)
+
+/**
  * Custom View that renders layer bitmaps with pan offset and handles touch for pan vs draw/tap.
  * Bitmap(s) stay fixed in memory; pan moves the "camera" via panX/panY.
  * All callbacks use bitmap-space coordinates (screen position transformed by inverse matrix).
@@ -24,26 +34,8 @@ class DrawingView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs) {
 
-    /** Layer bitmaps to draw (order: index 0 = bottom). */
-    var layerBitmaps: List<Bitmap> = emptyList()
-        set(value) {
-            if (field != value) {
-                field = value
-                invalidate()
-            }
-        }
-
-    /** For each layer, true if the layer should be skipped when transparent (no content). */
-    var layerTransparent: List<Boolean> = emptyList()
-        set(value) {
-            if (field != value) {
-                field = value
-                invalidate()
-            }
-        }
-
-    /** For each layer, true if the layer is hidden (visibility toggle). */
-    var layerHidden: List<Boolean> = emptyList()
+    /** Layers to draw (order: index 0 = bottom). */
+    var layers: List<RenderLayer> = emptyList()
         set(value) {
             if (field != value) {
                 field = value
@@ -246,87 +238,70 @@ class DrawingView @JvmOverloads constructor(
         bgPaint.color = canvasBackgroundColor
         canvas.drawRect(0f, 0f, w, h, bgPaint)
 
-        val layers = layerBitmaps
-        val transparent = layerTransparent
-        val hidden = layerHidden
         if (layers.isEmpty()) return
 
         matrix.reset()
         matrix.postScale(scale, scale)
         matrix.postTranslate(panX, panY)
 
-        val n = layers.size
-        val currentIdx = currentLayerIndex.coerceIn(0, n - 1)
-        val isCurrentLayerHidden = currentIdx in hidden.indices && hidden[currentIdx]
+        // Filter out hidden and transparent layers
+        val visibleLayers = layers.filter { !it.isHidden && !it.isTransparent }
+        val currentIdx = currentLayerIndex.coerceIn(0, layers.size - 1)
+        val currentLayer = layers.getOrNull(currentIdx)
+        val isCurrentLayerHidden = currentLayer?.isHidden ?: true
 
-        // Layers below current
-        for (i in 0 until currentIdx) {
-            if (i in layers.indices && 
-                (i >= transparent.size || !transparent[i]) &&
-                (i >= hidden.size || !hidden[i])) {
-                layers[i].let { bmp -> canvas.drawBitmap(bmp, matrix, null) }
-            }
-        }
-        // Current layer bitmap
-        if (currentIdx in layers.indices && 
-            (currentIdx >= transparent.size || !transparent[currentIdx]) &&
-            (currentIdx >= hidden.size || !hidden[currentIdx])) {
-            canvas.drawBitmap(layers[currentIdx], matrix, null)
-        }
-        // Current stroke preview in screen space (above current layer, below layers above)
-        // Skip preview if current layer is hidden
-        if (currentStrokePoints.isNotEmpty() && !isCurrentLayerHidden) {
-            path.rewind()
-            currentStrokePoints.forEachIndexed { index, o ->
-                val sx = panX + scale * o.x
-                val sy = panY + scale * o.y
-                if (index == 0) path.moveTo(sx, sy)
-                else path.lineTo(sx, sy)
-            }
-            strokePreviewPaint.strokeWidth = strokePreviewWidth
-            strokePreviewPaint.strokeCap = if (strokePreviewCapRound) Paint.Cap.ROUND else Paint.Cap.BUTT
-            strokePreviewPaint.strokeJoin = if (strokePreviewCapRound) Paint.Join.ROUND else Paint.Join.BEVEL
-            strokePreviewPaint.pathEffect = null
-            if (strokePreviewIsEraser) {
-                strokePreviewPaint.color = 0x80FF0000.toInt() // red, 50% alpha
-                strokePreviewPaint.pathEffect = DashPathEffect(floatArrayOf(10f, 10f), 0f)
-            } else {
-                strokePreviewPaint.color = strokePreviewColor
-            }
-            canvas.drawPath(path, strokePreviewPaint)
-        }
-        // Preview dot while finger is down (only if not dragging yet)
-        // Skip preview dot if current layer is hidden
-        if (enableDotPreview && !isCurrentLayerHidden) {
-            previewDotPosition?.let { pos ->
-                val paint = Paint().apply {
-                    isAntiAlias = true
-                    color = strokePreviewColor
-                    style = Paint.Style.FILL
-                    alpha = if (strokePreviewIsEraser) 128 else 255
+        // Draw all visible layers in order, inserting stroke preview after current layer
+        visibleLayers.forEach { layer ->
+            canvas.drawBitmap(layer.bitmap, matrix, null)
+            
+            // Insert stroke preview after current layer bitmap is drawn
+            if (layer.index == currentLayerIndex && !isCurrentLayerHidden) {
+                // Current stroke preview in screen space (above current layer, below layers above)
+                if (currentStrokePoints.isNotEmpty()) {
+                    path.rewind()
+                    currentStrokePoints.forEachIndexed { index, o ->
+                        val sx = panX + scale * o.x
+                        val sy = panY + scale * o.y
+                        if (index == 0) path.moveTo(sx, sy)
+                        else path.lineTo(sx, sy)
+                    }
+                    strokePreviewPaint.strokeWidth = strokePreviewWidth
+                    strokePreviewPaint.strokeCap = if (strokePreviewCapRound) Paint.Cap.ROUND else Paint.Cap.BUTT
+                    strokePreviewPaint.strokeJoin = if (strokePreviewCapRound) Paint.Join.ROUND else Paint.Join.BEVEL
+                    strokePreviewPaint.pathEffect = null
+                    if (strokePreviewIsEraser) {
+                        strokePreviewPaint.color = 0x80FF0000.toInt() // red, 50% alpha
+                        strokePreviewPaint.pathEffect = DashPathEffect(floatArrayOf(10f, 10f), 0f)
+                    } else {
+                        strokePreviewPaint.color = strokePreviewColor
+                    }
+                    canvas.drawPath(path, strokePreviewPaint)
                 }
-                val dotRadiusScreen = strokePreviewWidth / 2f
-                val screenX = panX + scale * pos.x
-                val screenY = panY + scale * pos.y
-                if (strokePreviewCapRound) {
-                    canvas.drawCircle(screenX, screenY, dotRadiusScreen, paint)
-                } else {
-                    canvas.drawRect(
-                        screenX - dotRadiusScreen,
-                        screenY - dotRadiusScreen,
-                        screenX + dotRadiusScreen,
-                        screenY + dotRadiusScreen,
-                        paint
-                    )
+                // Preview dot while finger is down (only if not dragging yet)
+                if (enableDotPreview) {
+                    previewDotPosition?.let { pos ->
+                        val paint = Paint().apply {
+                            isAntiAlias = true
+                            color = strokePreviewColor
+                            style = Paint.Style.FILL
+                            alpha = if (strokePreviewIsEraser) 128 else 255
+                        }
+                        val dotRadiusScreen = strokePreviewWidth / 2f
+                        val screenX = panX + scale * pos.x
+                        val screenY = panY + scale * pos.y
+                        if (strokePreviewCapRound) {
+                            canvas.drawCircle(screenX, screenY, dotRadiusScreen, paint)
+                        } else {
+                            canvas.drawRect(
+                                screenX - dotRadiusScreen,
+                                screenY - dotRadiusScreen,
+                                screenX + dotRadiusScreen,
+                                screenY + dotRadiusScreen,
+                                paint
+                            )
+                        }
+                    }
                 }
-            }
-        }
-        // Layers above current
-        for (i in (currentIdx + 1) until n) {
-            if (i in layers.indices && 
-                (i >= transparent.size || !transparent[i]) &&
-                (i >= hidden.size || !hidden[i])) {
-                layers[i].let { bmp -> canvas.drawBitmap(bmp, matrix, null) }
             }
         }
 
@@ -505,10 +480,9 @@ class DrawingView @JvmOverloads constructor(
     }
 
     private fun clampPan() {
-        val layers = layerBitmaps
         if (layers.isEmpty()) return
-        val bmpW = layers.maxOfOrNull { it.width }?.toFloat() ?: 0f
-        val bmpH = layers.maxOfOrNull { it.height }?.toFloat() ?: 0f
+        val bmpW = layers.maxOfOrNull { it.bitmap.width }?.toFloat() ?: 0f
+        val bmpH = layers.maxOfOrNull { it.bitmap.height }?.toFloat() ?: 0f
         val vw = width.toFloat()
         val vh = height.toFloat()
         val scaledW = bmpW * scale
