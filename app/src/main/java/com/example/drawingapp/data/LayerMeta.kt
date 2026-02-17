@@ -39,10 +39,12 @@ data class StrokeData(
 /** Per-layer metadata for persistence (hasFill + strokes). */
 data class LayerMeta(
     val hasFill: Boolean,
-    val strokes: List<StrokeData>
+    val strokes: List<StrokeData>,
+    val isHidden: Boolean = false
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("hasFill", hasFill)
+        put("isHidden", isHidden)
         put("strokes", JSONArray().apply {
             strokes.forEach { s ->
                 put(JSONObject().apply {
@@ -64,6 +66,7 @@ data class LayerMeta(
     companion object {
         fun fromJson(obj: JSONObject): LayerMeta {
             val hasFill = obj.optBoolean("hasFill", false)
+            val isHidden = obj.optBoolean("isHidden", false)
             val strokesArray = obj.optJSONArray("strokes") ?: JSONArray()
             val strokes = (0 until strokesArray.length()).map { i ->
                 val so = strokesArray.getJSONObject(i)
@@ -81,7 +84,7 @@ data class LayerMeta(
                     closed = so.optBoolean("closed", false)
                 )
             }
-            return LayerMeta(hasFill = hasFill, strokes = strokes)
+            return LayerMeta(hasFill = hasFill, strokes = strokes, isHidden = isHidden)
         }
     }
 }

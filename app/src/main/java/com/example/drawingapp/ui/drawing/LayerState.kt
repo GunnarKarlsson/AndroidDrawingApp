@@ -6,7 +6,8 @@ import com.example.drawingapp.data.Stroke
 data class LayerState(
     var bitmap: Bitmap,
     val strokes: MutableList<Stroke> = mutableListOf(),
-    var hasFill: Boolean = false
+    var hasFill: Boolean = false,
+    var isHidden: Boolean = false
 ) {
     fun isTransparent(): Boolean {
         return !hasFill && strokes.isEmpty()

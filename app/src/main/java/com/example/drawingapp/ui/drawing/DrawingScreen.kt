@@ -258,7 +258,11 @@ fun DrawingScreen(
     fun saveAllLayers() {
         if (layerStates.isNotEmpty()) {
             val layerMetas = layerStates.map { layer ->
-                LayerMeta(hasFill = layer.hasFill, strokes = layer.strokes.map { StrokeData.fromStroke(it) })
+                LayerMeta(
+                    hasFill = layer.hasFill,
+                    strokes = layer.strokes.map { StrokeData.fromStroke(it) },
+                    isHidden = layer.isHidden
+                )
             }
             onSaveLayers(pageId, layerStates.map { it.bitmap }, backgroundColor, layerMetas, currentLayerIndex)
         }
@@ -601,7 +605,15 @@ fun DrawingScreen(
                                             val meta = layerMetas?.getOrNull(index)
                                             val strokes = meta?.strokes?.map { it.toStroke() }?.toMutableList() ?: mutableListOf()
                                             val hasFill = meta?.hasFill ?: true
-                                            layerStates.add(LayerState(bitmap = bmp, strokes = strokes, hasFill = hasFill))
+                                            val isHidden = meta?.isHidden ?: false
+                                            layerStates.add(
+                                                LayerState(
+                                                    bitmap = bmp,
+                                                    strokes = strokes,
+                                                    hasFill = hasFill,
+                                                    isHidden = isHidden
+                                                )
+                                            )
                                         }
                                     }
                                     currentLayerIndex = currentLayerIndex.coerceIn(0, (layerStates.size - 1).coerceAtLeast(0))
@@ -987,6 +999,13 @@ fun DrawingScreen(
             onLayerSelected = { index -> currentLayerIndex = index },
             onAddLayer = { addLayer() },
             onDeleteLayer = { index -> deleteLayer(index) },
+            onToggleLayerHidden = { index ->
+                if (index in layerStates.indices) {
+                    val layer = layerStates[index]
+                    layerStates[index] = layer.copy(isHidden = !layer.isHidden)
+                    saveAllLayers()
+                }
+            },
             onDismiss = { showLayerManagerDialog = false },
             backgroundColor = backgroundColor
         )
@@ -1260,6 +1279,7 @@ private fun LayerManagerDialog(
     onLayerSelected: (Int) -> Unit,
     onAddLayer: () -> Unit,
     onDeleteLayer: (Int) -> Unit,
+    onToggleLayerHidden: (Int) -> Unit,
     onDismiss: () -> Unit,
     backgroundColor: Int
 ) {
@@ -1365,12 +1385,26 @@ private fun LayerManagerDialog(
                             
                             // Layer label
                             Text(
-                                text = "Layer ${originalIndex + 1}",
+                                text = "#${originalIndex + 1}",
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = HEADER_ICON_COLOR,
                                 modifier = Modifier.weight(1f)
                             )
                             
+                            // Visibility toggle (persisted per-layer; no other behavior yet)
+                            IconButton(
+                                onClick = { onToggleLayerHidden(originalIndex) }
+                            ) {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (layer.isHidden) R.drawable.ic_visibility_off else R.drawable.ic_visibility
+                                    ),
+                                    contentDescription = if (layer.isHidden) "Show layer" else "Hide layer",
+                                    tint = HEADER_ICON_COLOR,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+
                             // Delete icon (only show if more than one layer)
                             if (layerStates.size > 1) {
                                 IconButton(
