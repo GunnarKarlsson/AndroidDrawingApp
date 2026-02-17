@@ -189,7 +189,7 @@ fun DrawingScreen(
     pageId: String,
     onLoadLayers: (String) -> List<Bitmap?>,
     onLoadLayerMetas: (String) -> List<LayerMeta>?,
-    onSaveLayers: (String, List<Bitmap>, Int, List<LayerMeta>?) -> Unit,
+    onSaveLayers: (String, List<Bitmap>, Int, List<LayerMeta>?, Int) -> Unit,
     onLoadBackgroundColor: (String) -> Int,
     onSaveBackgroundColor: (String, Int) -> Unit,
     onExport: (Bitmap) -> Unit,
@@ -206,14 +206,15 @@ fun DrawingScreen(
     loadFavoriteColors: () -> List<Int> = { listOf(Color.Black.toArgb(), Color.White.toArgb()) },
     saveFavoriteColors: (List<Int>) -> Unit = {},
     onHomeClick: () -> Unit = {},
-    onExitPage: (String) -> Unit = {},
+    onExitPage: (String, Int) -> Unit = { _, _ -> },
+    initialCurrentLayerIndex: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    DisposableEffect(pageId) {
-        onDispose { onExitPage(pageId) }
-    }
     val layerStates = remember(pageId) { mutableStateListOf<LayerState>() }
-    var currentLayerIndex by remember(pageId) { mutableStateOf(0) }
+    var currentLayerIndex by remember(pageId) { mutableStateOf(initialCurrentLayerIndex) }
+    DisposableEffect(pageId) {
+        onDispose { onExitPage(pageId, currentLayerIndex) }
+    }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var selectedTool by remember { mutableStateOf(DrawTool.Pen) }
     var selectedColor by remember(initialStrokeColor) { mutableStateOf(initialStrokeColor) }
@@ -259,7 +260,7 @@ fun DrawingScreen(
             val layerMetas = layerStates.map { layer ->
                 LayerMeta(hasFill = layer.hasFill, strokes = layer.strokes.map { StrokeData.fromStroke(it) })
             }
-            onSaveLayers(pageId, layerStates.map { it.bitmap }, backgroundColor, layerMetas)
+            onSaveLayers(pageId, layerStates.map { it.bitmap }, backgroundColor, layerMetas, currentLayerIndex)
         }
     }
 
@@ -603,7 +604,7 @@ fun DrawingScreen(
                                             layerStates.add(LayerState(bitmap = bmp, strokes = strokes, hasFill = hasFill))
                                         }
                                     }
-                                    if (currentLayerIndex >= layerStates.size) currentLayerIndex = 0
+                                    currentLayerIndex = currentLayerIndex.coerceIn(0, (layerStates.size - 1).coerceAtLeast(0))
                                 }
                             }
                         },

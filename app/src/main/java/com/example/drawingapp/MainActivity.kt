@@ -177,7 +177,7 @@ class MainActivity : ComponentActivity() {
                                 pageId = pageId,
                                 onLoadLayers = { repo.loadPageLayers(it) },
                                 onLoadLayerMetas = { repo.loadPageLayerMetas(it) },
-                                onSaveLayers = { id, bitmaps, bgColor, layerMetas -> repo.savePageLayers(id, bitmaps, bgColor, layerMetas) },
+                                onSaveLayers = { id, bitmaps, bgColor, layerMetas, currentLayerIndex -> repo.savePageLayers(id, bitmaps, bgColor, layerMetas, currentLayerIndex) },
                                 onLoadBackgroundColor = { repo.loadPageBackgroundColor(it) },
                                 onSaveBackgroundColor = { id, color -> repo.savePageBackgroundColor(id, color) },
                                 onExport = { bmp ->
@@ -199,7 +199,13 @@ class MainActivity : ComponentActivity() {
                                 loadFavoriteColors = { repo.loadFavoriteColorsArgb() },
                                 saveFavoriteColors = { repo.saveFavoriteColorsArgb(it) },
                                 onHomeClick = { navController.popBackStack() },
-                                onExitPage = { pageId -> lifecycleScope.launch(Dispatchers.IO) { repo.generateThumbnailIfNeeded(pageId) } }
+                                onExitPage = { exitPageId, currentLayerIndex ->
+                                    lifecycleScope.launch(Dispatchers.IO) {
+                                        repo.savePageCurrentLayerIndex(exitPageId, currentLayerIndex)
+                                        repo.generateThumbnailIfNeeded(exitPageId)
+                                    }
+                                },
+                                initialCurrentLayerIndex = repo.loadPageCurrentLayerIndex(pageId)
                             )
                         }
                     }

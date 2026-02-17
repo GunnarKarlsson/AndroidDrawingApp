@@ -9,7 +9,8 @@ data class PageMeta(
     val backgroundColor: Int = 0xFFFFFFFF.toInt(),
     val layers: List<LayerMeta>? = null,
     val lastModified: Long = 0L,
-    val thumbnailTimestamp: Long = 0L
+    val thumbnailTimestamp: Long = 0L,
+    val currentLayerIndex: Int = 0
 ) {
     fun toJson(): String = JSONObject()
         .apply {
@@ -17,6 +18,7 @@ data class PageMeta(
             put("backgroundColor", backgroundColor)
             put("lastModified", lastModified)
             put("thumbnailTimestamp", thumbnailTimestamp)
+            put("currentLayerIndex", currentLayerIndex)
             layers?.let { list ->
                 put("layers", JSONArray().apply {
                     list.forEach { layer -> put(layer.toJson()) }
@@ -40,7 +42,8 @@ data class PageMeta(
                     backgroundColor = obj.optInt("backgroundColor", 0xFFFFFFFF.toInt()),
                     layers = layers,
                     lastModified = obj.optLong("lastModified", 0L),
-                    thumbnailTimestamp = obj.optLong("thumbnailTimestamp", 0L)
+                    thumbnailTimestamp = obj.optLong("thumbnailTimestamp", 0L),
+                    currentLayerIndex = obj.optInt("currentLayerIndex", 0)
                 )
             } catch (e: Exception) {
                 null

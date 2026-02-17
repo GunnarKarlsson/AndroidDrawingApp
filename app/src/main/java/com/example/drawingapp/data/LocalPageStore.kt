@@ -142,6 +142,12 @@ class LocalPageStore(context: Context) {
         return meta.backgroundColor
     }
 
+    fun loadPageCurrentLayerIndex(pageId: String): Int {
+        val pageDir = File(pagesDir, pageId)
+        if (!pageDir.exists()) return 0
+        return PageMeta.fromFile(File(pageDir, META_FILE))?.currentLayerIndex ?: 0
+    }
+
     fun savePageBackgroundColor(pageId: String, backgroundColor: Int) {
         try {
             val pageDir = File(pagesDir, pageId)
@@ -153,7 +159,18 @@ class LocalPageStore(context: Context) {
         }
     }
 
-    fun savePageLayers(pageId: String, bitmaps: List<Bitmap>, backgroundColor: Int = 0xFFFFFFFF.toInt(), layerMetas: List<LayerMeta>? = null) {
+    fun savePageCurrentLayerIndex(pageId: String, index: Int) {
+        try {
+            val pageDir = File(pagesDir, pageId)
+            if (!pageDir.exists()) return
+            val meta = PageMeta.fromFile(File(pageDir, META_FILE)) ?: return
+            File(pageDir, META_FILE).writeText(meta.copy(currentLayerIndex = index).toJson())
+        } catch (e: Exception) {
+            Log.e("LocalPageStore", "Failed to save current layer index for $pageId", e)
+        }
+    }
+
+    fun savePageLayers(pageId: String, bitmaps: List<Bitmap>, backgroundColor: Int = 0xFFFFFFFF.toInt(), layerMetas: List<LayerMeta>? = null, currentLayerIndex: Int? = null) {
         try {
             val pageDir = File(pagesDir, pageId)
             pageDir.mkdirs()
@@ -161,7 +178,8 @@ class LocalPageStore(context: Context) {
             val lastModified = System.currentTimeMillis()
             val thumbnailTimestamp = existingMeta?.thumbnailTimestamp ?: 0L
             val layerMetasToSave = layerMetas?.take(bitmaps.size)
-            File(pageDir, META_FILE).writeText(PageMeta(layerCount = bitmaps.size, backgroundColor = backgroundColor, layers = layerMetasToSave, lastModified = lastModified, thumbnailTimestamp = thumbnailTimestamp).toJson())
+            val currentLayer = currentLayerIndex ?: existingMeta?.currentLayerIndex ?: 0
+            File(pageDir, META_FILE).writeText(PageMeta(layerCount = bitmaps.size, backgroundColor = backgroundColor, layers = layerMetasToSave, lastModified = lastModified, thumbnailTimestamp = thumbnailTimestamp, currentLayerIndex = currentLayer).toJson())
             bitmaps.forEachIndexed { index, bitmap ->
                 FileOutputStream(File(pageDir, "layer_$index.png")).use { out ->
                     bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)

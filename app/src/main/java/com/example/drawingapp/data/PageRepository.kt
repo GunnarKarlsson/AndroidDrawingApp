@@ -51,14 +51,20 @@ class PageRepository(private val store: LocalPageStore) {
 
     fun loadPageLayerMetas(pageId: String): List<LayerMeta>? = store.loadPageLayerMetas(pageId)
 
-    fun savePageLayers(pageId: String, bitmaps: List<Bitmap>, backgroundColor: Int = 0xFFFFFFFF.toInt(), layerMetas: List<LayerMeta>? = null) {
-        store.savePageLayers(pageId, bitmaps, backgroundColor, layerMetas)
-    }
-
     fun loadPageBackgroundColor(pageId: String): Int = store.loadPageBackgroundColor(pageId)
+
+    fun loadPageCurrentLayerIndex(pageId: String): Int = store.loadPageCurrentLayerIndex(pageId)
 
     fun savePageBackgroundColor(pageId: String, color: Int) {
         store.savePageBackgroundColor(pageId, color)
+    }
+
+    fun savePageCurrentLayerIndex(pageId: String, index: Int) {
+        store.savePageCurrentLayerIndex(pageId, index)
+    }
+
+    fun savePageLayers(pageId: String, bitmaps: List<Bitmap>, backgroundColor: Int = 0xFFFFFFFF.toInt(), layerMetas: List<LayerMeta>? = null, currentLayerIndex: Int? = null) {
+        store.savePageLayers(pageId, bitmaps, backgroundColor, layerMetas, currentLayerIndex)
     }
 
     fun loadStrokeSizePx(defaultValue: Float): Float = store.loadStrokeSizePx(defaultValue)
