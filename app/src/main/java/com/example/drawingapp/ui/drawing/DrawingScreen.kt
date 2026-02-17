@@ -78,7 +78,6 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.sqrt
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
@@ -95,10 +94,12 @@ import com.example.drawingapp.data.LayerMeta
 import com.example.drawingapp.data.Stroke
 import com.example.drawingapp.data.StrokeCapStyle
 import com.example.drawingapp.data.StrokeData
+import com.example.drawingapp.util.ColorUtil
 import com.example.drawingapp.util.getExportDirectoryPath
 import com.example.drawingapp.util.shouldAutoClose
 import com.example.drawingapp.util.smoothStrokePoints
 import java.io.ByteArrayOutputStream
+
 
 private const val PENCIL_ALPHA = 0.75f
 private const val CLOSE_THRESHOLD_PX = 50f
@@ -143,44 +144,8 @@ private fun getToolDisplayName(tool: DrawTool): String {
     }
 }
 
-private fun colorFromHsv(hue: Float, saturation: Float, value: Float): Color {
-    val h = hue.coerceIn(0f, 360f) / 60f
-    val s = saturation.coerceIn(0f, 1f)
-    val v = value.coerceIn(0f, 1f)
-    val c = v * s
-    val x = c * (1 - abs(h % 2f - 1f))
-    val m = v - c
-    val (r, g, b) = when {
-        h < 1 -> Triple(c, x, 0f)
-        h < 2 -> Triple(x, c, 0f)
-        h < 3 -> Triple(0f, c, x)
-        h < 4 -> Triple(0f, x, c)
-        h < 5 -> Triple(x, 0f, c)
-        else -> Triple(c, 0f, x)
-    }
-    return Color(
-        red = (r + m).coerceIn(0f, 1f),
-        green = (g + m).coerceIn(0f, 1f),
-        blue = (b + m).coerceIn(0f, 1f),
-        alpha = 1f
-    )
-}
-
 private val DESATURATED_PRESETS = listOf(0f, 30f, 60f, 90f, 120f, 150f, 180f, 210f, 240f, 270f, 300f, 330f).map { hue ->
-    colorFromHsv(hue, 0.55f, 0.9f)
-}
-
-/** Returns HSV value (0f..1f) for the given color, for brightness slider position. */
-private fun colorToHsvValue(color: androidx.compose.ui.graphics.Color): Float {
-    val argb = color.toArgb()
-    val hsv = FloatArray(3)
-    android.graphics.Color.RGBToHSV(
-        android.graphics.Color.red(argb),
-        android.graphics.Color.green(argb),
-        android.graphics.Color.blue(argb),
-        hsv
-    )
-    return hsv[2]
+    ColorUtil.colorFromHsv(hue, 0.55f, 0.9f)
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
@@ -662,10 +627,9 @@ fun DrawingScreen(
                         view.onTap = { bx, by ->
                             when (selectedTool) {
                                 DrawTool.Eyedropper -> compositeLayers()?.let { composite ->
-                                    val x = bx.toInt().coerceIn(0, composite.width - 1)
-                                    val y = by.toInt().coerceIn(0, composite.height - 1)
-                                    val pixelColor = composite.getPixel(x, y)
-                                    selectedColor = Color(pixelColor)
+                                    val x = bx.toInt()
+                                    val y = by.toInt()
+                                    selectedColor = ColorUtil.getPixelColor(composite, x, y)
                                     onConfirmStrokeColor(selectedColor)
                                     selectedTool = DrawTool.Pen
                                 }
@@ -685,7 +649,7 @@ fun DrawingScreen(
                                             Bitmap.Config.ARGB_8888
                                         )
                                         android.graphics.Canvas(newBitmap).drawBitmap(layer.bitmap, 0f, 0f, null)
-                                        floodFill(
+                                        ColorUtil.floodFill(
                                             newBitmap,
                                             bx.toInt(),
                                             by.toInt(),
@@ -898,7 +862,7 @@ fun DrawingScreen(
                                     val newColor = Color(envelope.getColor())
                                     pendingColor = newColor
                                     brightnessBar.post {
-                                        brightnessBar.setSelectorPosition(colorToHsvValue(newColor))
+                                        brightnessBar.setSelectorPosition(ColorUtil.colorToHsvValue(newColor))
                                     }
                                 })
                                 .setActionMode(ActionMode.LAST)
@@ -925,7 +889,7 @@ fun DrawingScreen(
                                         picker.selectByHsvColor(color.toArgb())
                                     }
                                     if (brightnessBar != null && brightnessBar.width > 0) {
-                                        brightnessBar.setSelectorPosition(colorToHsvValue(color))
+                                        brightnessBar.setSelectorPosition(ColorUtil.colorToHsvValue(color))
                                     }
                                 }
                             }
@@ -1121,108 +1085,6 @@ private fun drawStrokeOnBitmap(bitmap: Bitmap?, stroke: Stroke) {
     canvas.drawPath(path, paint)
 }
 
-/**
- * Scanline flood fill on a locked int[] pixel array. Faster than per-pixel queue fill.
- * Supports color tolerance (Euclidean RGB). 4-connected. Stack-based, one seed per run above/below.
- */
-private fun floodFill(
-    bitmap: Bitmap,
-    startX: Int,
-    startY: Int,
-    fillColorArgb: Int,
-    tolerance: Float = 0f
-) {
-    val w = bitmap.width
-    val h = bitmap.height
-    if (w <= 0 || h <= 0) return
-    val x0 = startX.coerceIn(0, w - 1)
-    val y0 = startY.coerceIn(0, h - 1)
-
-    val pixels = IntArray(w * h)
-    bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
-
-    val targetColor = pixels[y0 * w + x0]
-    if (colorDistance(targetColor, fillColorArgb) <= tolerance) return
-
-    val visited = BooleanArray(w * h)
-    val stack = ArrayDeque<Pair<Int, Int>>()
-    stack.add(x0 to y0)
-    visited[y0 * w + x0] = true
-
-    while (stack.isNotEmpty()) {
-        val (x, y) = stack.removeLast()
-
-        var lx = x
-        while (lx >= 0 && colorDistance(pixels[y * w + lx], targetColor) <= tolerance) {
-            lx--
-        }
-        lx++
-
-        var rx = x
-        while (rx < w && colorDistance(pixels[y * w + rx], targetColor) <= tolerance) {
-            rx++
-        }
-        rx--
-
-        for (i in lx..rx) {
-            pixels[y * w + i] = fillColorArgb
-            visited[y * w + i] = true
-        }
-
-        val above = y - 1
-        val below = y + 1
-
-        if (above >= 0) {
-            var sx = lx
-            while (sx <= rx) {
-                val idx = above * w + sx
-                if (!visited[idx] && colorDistance(pixels[idx], targetColor) <= tolerance) {
-                    visited[idx] = true
-                    stack.add(sx to above)
-                    sx++
-                    while (sx <= rx && colorDistance(pixels[above * w + sx], targetColor) <= tolerance) {
-                        sx++
-                    }
-                } else {
-                    sx++
-                }
-            }
-        }
-
-        if (below < h) {
-            var sx = lx
-            while (sx <= rx) {
-                val idx = below * w + sx
-                if (!visited[idx] && colorDistance(pixels[idx], targetColor) <= tolerance) {
-                    visited[idx] = true
-                    stack.add(sx to below)
-                    sx++
-                    while (sx <= rx && colorDistance(pixels[below * w + sx], targetColor) <= tolerance) {
-                        sx++
-                    }
-                } else {
-                    sx++
-                }
-            }
-        }
-    }
-
-    bitmap.setPixels(pixels, 0, w, 0, 0, w, h)
-}
-
-/** Simple RGB Euclidean distance (0–441 max). */
-private fun colorDistance(a: Int, b: Int): Float {
-    val r1 = (a shr 16) and 0xFF
-    val g1 = (a shr 8) and 0xFF
-    val b1 = a and 0xFF
-    val r2 = (b shr 16) and 0xFF
-    val g2 = (b shr 8) and 0xFF
-    val b2 = b and 0xFF
-    val dr = r1 - r2
-    val dg = g1 - g2
-    val db = b1 - b2
-    return sqrt((dr * dr + dg * dg + db * db).toDouble()).toFloat()
-}
 
 private fun generateLayerThumbnail(bitmap: Bitmap, size: Int = 80): Bitmap {
     if (bitmap.width <= 0 || bitmap.height <= 0) {
