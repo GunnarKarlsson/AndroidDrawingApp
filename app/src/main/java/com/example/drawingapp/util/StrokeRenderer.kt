@@ -12,6 +12,7 @@ import com.example.drawingapp.data.DrawTool
 import com.example.drawingapp.data.Stroke
 import com.example.drawingapp.data.StrokeCapStyle
 import com.example.drawingapp.rendering.Renderer
+import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.random.Random
@@ -105,7 +106,10 @@ object StrokeRenderer : Renderer {
 
         val brushRadius = (stroke.strokeWidth / 2f).toInt().coerceAtLeast(4)
         val half = brushRadius
-        val smearStrength = 0.68f
+        val smearStrength = 0.5f
+        val minCoverageToRefresh = 0.15f
+        val decayLengthPx = 80f
+        
         val paint = Paint().apply {
             isAntiAlias = true
             isFilterBitmap = true
@@ -114,6 +118,12 @@ object StrokeRenderer : Renderer {
         val tmpBufferSize = (brushRadius * 2 + 1).let { it * it }
         val tmpBuffer = IntArray(tmpBufferSize)
         val strokeColorArgb = stroke.color.toArgb()
+        
+        // Trailing state: carried color and strength
+        var carriedColorArgb = strokeColorArgb
+        var carryStrength = 0f
+        var lastDabX = Float.NaN
+        var lastDabY = Float.NaN
 
         stroke.points.windowed(size = 2, step = 1).forEach { (prev, curr) ->
             val dx = curr.x - prev.x
@@ -165,11 +175,36 @@ object StrokeRenderer : Renderer {
                     strokeColorArgb
                 }
 
-                val finalArgb = blendArgb(picked, strokeColorArgb, smearStrength)
+                // Compute coverage (non-transparent pixel ratio)
+                val coverage = if (pixelCount > 0) count.toFloat() / pixelCount else 0f
+                
+                // Refresh carried color if we're over painted pixels, otherwise decay
+                if (coverage >= minCoverageToRefresh) {
+                    carriedColorArgb = picked
+                    carryStrength = 1.0f
+                } else {
+                    // Distance-based exponential decay
+                    if (!lastDabX.isNaN() && !lastDabY.isNaN()) {
+                        val dabDistPx = hypot(jitterX - lastDabX, jitterY - lastDabY)
+                        carryStrength *= exp(-dabDistPx / decayLengthPx).toFloat()
+                    } else {
+                        carryStrength = 0f
+                    }
+                }
+                
+                // Blend picked color with carried color based on carryStrength
+                val baseFromCanvas = blendArgb(picked, carriedColorArgb, carryStrength)
+                
+                // Then blend with stroke color (existing oil paint behavior)
+                val finalArgb = blendArgb(baseFromCanvas, strokeColorArgb, smearStrength)
                 paint.color = finalArgb
                 paint.alpha = (180..240).random()
 
                 canvas.drawCircle(jitterX.toFloat(), jitterY.toFloat(), brushRadius.toFloat(), paint)
+                
+                // Update last dab position for distance calculation
+                lastDabX = jitterX.toFloat()
+                lastDabY = jitterY.toFloat()
             }
         }
     }
