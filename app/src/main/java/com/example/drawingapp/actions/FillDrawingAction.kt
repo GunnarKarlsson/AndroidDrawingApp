@@ -21,10 +21,7 @@ class FillDrawingAction(
         val h = layer.bitmap.height
         val previousBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         Canvas(previousBitmap).drawBitmap(layer.bitmap, 0f, 0f, null)
-        val newBitmap = renderer.render(layer.bitmap, this)
-        if (newBitmap != null) {
-            layer.bitmap = newBitmap
-        }
+        renderer.render(layer.bitmap, this)
         layer.hasFill = true
         return DrawingActionResult.BitmapChanged(previousBitmap)
     }

@@ -523,6 +523,7 @@ fun DrawingScreen(
                                         drawingEngine.executeAction(action, layers)
                                         saveAllLayers()
                                         canvasRefreshTrigger++
+                                        view.invalidate()
                                     }
                                 }
                                 is TapIntent.DrawDot -> {

@@ -7,8 +7,8 @@ import com.example.drawingapp.actions.FillDrawingAction
 import com.example.drawingapp.util.ColorUtil
 
 /**
- * Renders a flood-fill onto a copy of the bitmap. Handles [FillDrawingAction].
- * Returns the new bitmap so the action can set layer.bitmap = result.
+ * Renders a flood-fill into the given bitmap in place (same behavior as stroke/dot).
+ * Uses a temp buffer for the fill algorithm, then draws the result back onto the input bitmap.
  */
 object FillRenderer : Renderer {
 
@@ -16,15 +16,17 @@ object FillRenderer : Renderer {
         if (action !is FillDrawingAction) return null
         val w = bitmap.width
         val h = bitmap.height
-        val newBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        Canvas(newBitmap).drawBitmap(bitmap, 0f, 0f, null)
+        val temp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        Canvas(temp).drawBitmap(bitmap, 0f, 0f, null)
         ColorUtil.floodFill(
-            newBitmap,
+            temp,
             action.x.toInt(),
             action.y.toInt(),
             action.fillColorArgb,
             action.tolerance
         )
-        return newBitmap
+        Canvas(bitmap).drawBitmap(temp, 0f, 0f, null)
+        if (!temp.isRecycled) temp.recycle()
+        return null
     }
 }
