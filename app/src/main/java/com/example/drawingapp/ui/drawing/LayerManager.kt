@@ -43,7 +43,7 @@ class LayerManager {
         if (loadedBitmaps.isEmpty()) {
             val bmp = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
             bmp.eraseColor(android.graphics.Color.TRANSPARENT)
-            layers.add(LayerState(bitmap = bmp))
+            layers.add(LayerState(bitmap = bmp, hasFill = true))
         } else {
             loadedBitmaps.forEachIndexed { index, lb ->
                 val bmp = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
@@ -77,7 +77,7 @@ class LayerManager {
         if (canvasSize.width <= 0 || canvasSize.height <= 0) return
         val newBitmap = Bitmap.createBitmap(canvasSize.width, canvasSize.height, Bitmap.Config.ARGB_8888)
         newBitmap.eraseColor(android.graphics.Color.TRANSPARENT)
-        layers.add(LayerState(bitmap = newBitmap))
+        layers.add(LayerState(bitmap = newBitmap, hasFill = true))
         currentLayerIndex = layers.lastIndex
     }
 
