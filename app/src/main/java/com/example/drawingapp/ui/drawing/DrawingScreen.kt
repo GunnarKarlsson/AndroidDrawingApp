@@ -147,10 +147,9 @@ fun DrawingScreen(
     initialCurrentLayerIndex: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    val layerStates = remember(pageId) { mutableStateListOf<LayerState>() }
-    var currentLayerIndex by remember(pageId) { mutableStateOf(initialCurrentLayerIndex) }
+    val layerManager = remember(pageId) { LayerManager() }
     DisposableEffect(pageId) {
-        onDispose { onExitPage(pageId, currentLayerIndex) }
+        onDispose { onExitPage(pageId, layerManager.currentLayerIndex) }
     }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var selectedTool by remember { mutableStateOf(DrawTool.Pen) }
@@ -195,59 +194,45 @@ fun DrawingScreen(
     val strokeColor = currentTool.transformColor(selectedColor, toolSettings)
 
     fun saveAllLayers() {
-        if (layerStates.isNotEmpty()) {
-            val layerMetas = layerStates.map { layer ->
+        val layers = layerManager.getLayers()
+        if (layers.isNotEmpty()) {
+            val layerMetas = layers.map { layer ->
                 LayerMeta(
                     hasFill = layer.hasFill,
                     strokes = layer.strokes.map { StrokeData.fromStroke(it) },
                     isHidden = layer.isHidden
                 )
             }
-            onSaveLayers(pageId, layerStates.map { it.bitmap }, backgroundColor, layerMetas, currentLayerIndex)
+            onSaveLayers(pageId, layers.map { it.bitmap }, backgroundColor, layerMetas, layerManager.currentLayerIndex)
         }
     }
 
     fun undo() {
-        drawingEngine.undo(layerStates)
+        drawingEngine.undo(layerManager.getLayers())
         saveAllLayers()
         canvasRefreshTrigger++
     }
 
     fun redo() {
-        drawingEngine.redo(layerStates)
+        drawingEngine.redo(layerManager.getLayers())
         saveAllLayers()
         canvasRefreshTrigger++
     }
 
     fun addLayer() {
-        if (canvasSize.width <= 0 || canvasSize.height <= 0) return
-        val newBitmap = Bitmap.createBitmap(canvasSize.width, canvasSize.height, Bitmap.Config.ARGB_8888)
-        newBitmap.eraseColor(android.graphics.Color.TRANSPARENT)
-        layerStates.add(LayerState(bitmap = newBitmap))
-        currentLayerIndex = layerStates.lastIndex
+        layerManager.addLayer()
         saveAllLayers()
+        canvasRefreshTrigger++
     }
 
     fun deleteLayer(index: Int) {
-        if (layerStates.size <= 1) return
-        layerStates.removeAt(index)
-        if (currentLayerIndex >= layerStates.size) currentLayerIndex = layerStates.lastIndex
-        else if (currentLayerIndex > index) currentLayerIndex--
-        saveAllLayers()
+        if (layerManager.deleteLayer(index)) {
+            saveAllLayers()
+            canvasRefreshTrigger++
+        }
     }
 
-    fun compositeLayers(): Bitmap? {
-        if (layerStates.isEmpty() || canvasSize.width <= 0 || canvasSize.height <= 0) return null
-        val out = Bitmap.createBitmap(canvasSize.width, canvasSize.height, Bitmap.Config.ARGB_8888)
-        out.eraseColor(backgroundColor)
-        val canvas = android.graphics.Canvas(out)
-        layerStates.forEach { layer ->
-            if (!layer.isTransparent() && !layer.isHidden) {
-                canvas.drawBitmap(layer.bitmap, 0f, 0f, null)
-            }
-        }
-        return out
-    }
+    fun compositeLayers(): Bitmap? = layerManager.compositeLayers(backgroundColor)
 
     Scaffold(
         modifier = modifier,
@@ -478,43 +463,13 @@ fun DrawingScreen(
                                     val loaded = onLoadLayers(pageId)
                                     val layerMetas = onLoadLayerMetas(pageId)
                                     backgroundColor = onLoadBackgroundColor(pageId)
-                                    if (loaded.isEmpty()) {
-                                        val bmp = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
-                                        bmp.eraseColor(android.graphics.Color.TRANSPARENT)
-                                        layerStates.add(LayerState(bitmap = bmp))
-                                    } else {
-                                        loaded.forEachIndexed { index, lb ->
-                                            val bmp = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
-                                            bmp.eraseColor(android.graphics.Color.TRANSPARENT)
-                                            lb?.let {
-                                                android.graphics.Canvas(bmp).drawBitmap(
-                                                    it,
-                                                    Rect(0, 0, it.width, it.height),
-                                                    Rect(0, 0, size.width, size.height),
-                                                    null
-                                                )
-                                            } ?: run { bmp.eraseColor(android.graphics.Color.TRANSPARENT) }
-                                            val meta = layerMetas?.getOrNull(index)
-                                            val strokes = meta?.strokes?.map { it.toStroke() }?.toMutableList() ?: mutableListOf()
-                                            val hasFill = meta?.hasFill ?: true
-                                            val isHidden = meta?.isHidden ?: false
-                                            layerStates.add(
-                                                LayerState(
-                                                    bitmap = bmp,
-                                                    strokes = strokes,
-                                                    hasFill = hasFill,
-                                                    isHidden = isHidden
-                                                )
-                                            )
-                                        }
-                                    }
-                                    currentLayerIndex = currentLayerIndex.coerceIn(0, (layerStates.size - 1).coerceAtLeast(0))
+                                    layerManager.loadLayers(size, loaded, layerMetas, initialCurrentLayerIndex)
                                 }
                             }
                         },
                     update = { view ->
                         drawingViewRef = view
-                        view.layers = layerStates.mapIndexed { index, layerState ->
+                        view.layers = layerManager.getLayers().mapIndexed { index, layerState ->
                             RenderLayer(
                                 bitmap = layerState.bitmap,
                                 isHidden = layerState.isHidden,
@@ -522,7 +477,7 @@ fun DrawingScreen(
                                 index = index
                             )
                         }
-                        view.currentLayerIndex = currentLayerIndex
+                        view.currentLayerIndex = layerManager.currentLayerIndex
                         view.canvasBackgroundColor = backgroundColor
                         view.isPanning = currentTool.affectsViewInteraction()
                         view.strokePreviewColor = strokeColor.toArgb()
@@ -531,19 +486,21 @@ fun DrawingScreen(
                         view.strokePreviewIsEraser = (currentTool.drawTool == DrawTool.Eraser)
                         view.enableDotPreview = currentTool.supportsContinuousDrawing()
                         view.onStrokeDrawn = { points, _ ->
-                            if (currentLayerIndex in layerStates.indices && points.size > 1) {
-                                val context = DrawingContext(currentLayerIndex, canvasSize, view.scale)
+                            val layers = layerManager.getLayers()
+                            if (layerManager.currentLayerIndex in layers.indices && points.size > 1) {
+                                val context = DrawingContext(layerManager.currentLayerIndex, canvasSize, view.scale)
                                 val intent = currentTool.createAction(points, toolSettings, context)
                                 if (intent != null) {
-                                    val action = StrokeDrawingAction(currentLayerIndex, intent)
-                                    drawingEngine.executeAction(action, layerStates)
+                                    val action = StrokeDrawingAction(layerManager.currentLayerIndex, intent)
+                                    drawingEngine.executeAction(action, layers)
                                     saveAllLayers()
                                     canvasRefreshTrigger++
                                 }
                             }
                         }
                         view.onTap = { bx, by ->
-                            val context = DrawingContext(currentLayerIndex, canvasSize, view.scale)
+                            val layers = layerManager.getLayers()
+                            val context = DrawingContext(layerManager.currentLayerIndex, canvasSize, view.scale)
                             val intent = currentTool.handleTap(bx, by, toolSettings, context)
                             when (intent) {
                                 is TapIntent.Eyedropper -> compositeLayers()?.let { composite ->
@@ -554,23 +511,23 @@ fun DrawingScreen(
                                     selectedTool = DrawTool.Pen
                                 }
                                 is TapIntent.Fill -> {
-                                    if (currentLayerIndex in layerStates.indices) {
+                                    if (layerManager.currentLayerIndex in layers.indices) {
                                         val action = FillDrawingAction(
-                                            currentLayerIndex,
+                                            layerManager.currentLayerIndex,
                                             intent.x,
                                             intent.y,
                                             selectedColor.toArgb(),
                                             18f
                                         )
-                                        drawingEngine.executeAction(action, layerStates)
+                                        drawingEngine.executeAction(action, layers)
                                         saveAllLayers()
                                         canvasRefreshTrigger++
                                     }
                                 }
                                 is TapIntent.DrawDot -> {
-                                    if (currentLayerIndex in layerStates.indices) {
+                                    if (layerManager.currentLayerIndex in layers.indices) {
                                         val action = DrawDotAction(
-                                            currentLayerIndex,
+                                            layerManager.currentLayerIndex,
                                             intent.x,
                                             intent.y,
                                             intent.dotRadiusBitmap,
@@ -578,7 +535,7 @@ fun DrawingScreen(
                                             intent.isEraser,
                                             strokeCapStyle
                                         )
-                                        drawingEngine.executeAction(action, layerStates)
+                                        drawingEngine.executeAction(action, layers)
                                         saveAllLayers()
                                         canvasRefreshTrigger++
                                     }
@@ -845,17 +802,14 @@ fun DrawingScreen(
 
     if (showLayerManagerDialog) {
         LayerManagerDialog(
-            layerStates = layerStates,
-            currentLayerIndex = currentLayerIndex,
-            onLayerSelected = { index -> currentLayerIndex = index },
+            layerStates = layerManager.getLayers(),
+            currentLayerIndex = layerManager.currentLayerIndex,
+            onLayerSelected = { index -> layerManager.currentLayerIndex = index },
             onAddLayer = { addLayer() },
             onDeleteLayer = { index -> deleteLayer(index) },
             onToggleLayerHidden = { index ->
-                if (index in layerStates.indices) {
-                    val layer = layerStates[index]
-                    layerStates[index] = layer.copy(isHidden = !layer.isHidden)
-                    saveAllLayers()
-                }
+                layerManager.toggleLayerHidden(index)
+                saveAllLayers()
             },
             onDismiss = { showLayerManagerDialog = false },
             backgroundColor = backgroundColor
