@@ -2,7 +2,6 @@ package com.example.drawingapp.ui.drawing
 
 import android.app.Activity
 import android.graphics.Bitmap
-import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.view.ViewGroup
@@ -74,7 +73,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import kotlin.math.abs
-import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -94,6 +92,10 @@ import com.example.drawingapp.data.LayerMeta
 import com.example.drawingapp.data.Stroke
 import com.example.drawingapp.data.StrokeCapStyle
 import com.example.drawingapp.data.StrokeData
+import com.example.drawingapp.actions.DrawDotAction
+import com.example.drawingapp.actions.DrawingEngine
+import com.example.drawingapp.actions.FillDrawingAction
+import com.example.drawingapp.actions.StrokeDrawingAction
 import com.example.drawingapp.tools.DrawingContext
 import com.example.drawingapp.tools.DrawingTool
 import com.example.drawingapp.tools.StrokeIntent
@@ -106,7 +108,6 @@ import com.example.drawingapp.util.getExportDirectoryPath
 import java.io.ByteArrayOutputStream
 
 
-private const val MIN_STROKE_SEGMENT_PX = 0.5f
 private val STROKE_SIZE_RANGE = 1f..64f
 private const val DEFAULT_STROKE_SIZE_PX = 20f // ~30% into 1..64
 private val DEFAULT_COLOR = Color.Black
@@ -114,12 +115,6 @@ private val DEFAULT_COLOR = Color.Black
 private val HEADER_BACKGROUND = Color(0xFF565563)
 private val HEADER_ICON_COLOR = Color(0xFFE1D8D5)
 private val HEADER_ICON_SIZE = 29.dp // 20% larger than default 24.dp
-
-/** Represents one undoable action for the unified undo stack. */
-private sealed class UndoEntry {
-    data class Stroke(val layerIndex: Int, val stroke: com.example.drawingapp.data.Stroke? = null) : UndoEntry()
-    data class Fill(val layerIndex: Int, val bitmapBeforeFill: Bitmap) : UndoEntry()
-}
 
 private val DESATURATED_PRESETS = listOf(0f, 30f, 60f, 90f, 120f, 150f, 180f, 210f, 240f, 270f, 300f, 330f).map { hue ->
     ColorUtil.colorFromHsv(hue, 0.55f, 0.9f)
@@ -188,8 +183,7 @@ fun DrawingScreen(
     var showToolSelectionModal by remember { mutableStateOf(false) }
     var drawingViewRef by remember { mutableStateOf<DrawingView?>(null) }
     var canvasRefreshTrigger by remember { mutableStateOf(0) }
-    val undoStack = remember(pageId) { mutableStateListOf<UndoEntry>() }
-    val redoStack = remember(pageId) { mutableStateListOf<UndoEntry>() }
+    val drawingEngine = remember(pageId) { DrawingEngine() }
     val strokeWidth = strokeSizePx
     val toolSettings = ToolSettings(
         color = selectedColor,
@@ -214,60 +208,13 @@ fun DrawingScreen(
     }
 
     fun undo() {
-        if (undoStack.isEmpty()) return
-        val entry = undoStack.removeAt(undoStack.lastIndex)
-        when (entry) {
-            is UndoEntry.Stroke -> {
-                if (entry.layerIndex !in layerStates.indices) return
-                val layer = layerStates[entry.layerIndex]
-                if (layer.strokes.isEmpty()) return
-                val removedStroke = layer.strokes.removeAt(layer.strokes.lastIndex)
-                layer.bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
-                layer.strokes.forEach { stroke -> drawStrokeOnBitmap(layer.bitmap, stroke) }
-                // Add to redo stack with the removed stroke
-                redoStack.add(UndoEntry.Stroke(entry.layerIndex, removedStroke))
-            }
-            is UndoEntry.Fill -> {
-                if (entry.layerIndex in layerStates.indices) {
-                    val layer = layerStates[entry.layerIndex]
-                    val currentBitmap = Bitmap.createBitmap(layer.bitmap.width, layer.bitmap.height, Bitmap.Config.ARGB_8888)
-                    android.graphics.Canvas(currentBitmap).drawBitmap(layer.bitmap, 0f, 0f, null)
-                    layer.bitmap = entry.bitmapBeforeFill
-                    // Add to redo stack with the current state before fill
-                    redoStack.add(UndoEntry.Fill(entry.layerIndex, currentBitmap))
-                }
-            }
-        }
+        drawingEngine.undo(layerStates)
         saveAllLayers()
         canvasRefreshTrigger++
     }
-    
+
     fun redo() {
-        if (redoStack.isEmpty()) return
-        val entry = redoStack.removeAt(redoStack.lastIndex)
-        when (entry) {
-            is UndoEntry.Stroke -> {
-                if (entry.layerIndex !in layerStates.indices) return
-                val layer = layerStates[entry.layerIndex]
-                val strokeToRestore = entry.stroke
-                if (strokeToRestore != null) {
-                    layer.strokes.add(strokeToRestore)
-                    drawStrokeOnBitmap(layer.bitmap, strokeToRestore)
-                    // Add back to undo stack (without stroke data, since undo will remove it)
-                    undoStack.add(UndoEntry.Stroke(entry.layerIndex))
-                }
-            }
-            is UndoEntry.Fill -> {
-                if (entry.layerIndex in layerStates.indices) {
-                    val layer = layerStates[entry.layerIndex]
-                    val currentBitmap = Bitmap.createBitmap(layer.bitmap.width, layer.bitmap.height, Bitmap.Config.ARGB_8888)
-                    android.graphics.Canvas(currentBitmap).drawBitmap(layer.bitmap, 0f, 0f, null)
-                    layer.bitmap = entry.bitmapBeforeFill
-                    // Add back to undo stack
-                    undoStack.add(UndoEntry.Fill(entry.layerIndex, currentBitmap))
-                }
-            }
-        }
+        drawingEngine.redo(layerStates)
         saveAllLayers()
         canvasRefreshTrigger++
     }
@@ -588,19 +535,8 @@ fun DrawingScreen(
                                 val context = DrawingContext(currentLayerIndex, canvasSize, view.scale)
                                 val intent = currentTool.createAction(points, toolSettings, context)
                                 if (intent != null) {
-                                    val stroke = Stroke(
-                                        points = intent.points,
-                                        color = intent.color,
-                                        strokeWidth = intent.strokeWidth,
-                                        tool = intent.drawTool,
-                                        strokeCapStyle = intent.strokeCapStyle,
-                                        closed = intent.closed
-                                    )
-                                    val layer = layerStates[currentLayerIndex]
-                                    layer.strokes.add(stroke)
-                                    drawStrokeOnBitmap(layer.bitmap, stroke)
-                                    redoStack.clear()
-                                    undoStack.add(UndoEntry.Stroke(currentLayerIndex))
+                                    val action = StrokeDrawingAction(currentLayerIndex, intent)
+                                    drawingEngine.executeAction(action, layerStates)
                                     saveAllLayers()
                                     canvasRefreshTrigger++
                                 }
@@ -619,61 +555,30 @@ fun DrawingScreen(
                                 }
                                 is TapIntent.Fill -> {
                                     if (currentLayerIndex in layerStates.indices) {
-                                        val layer = layerStates[currentLayerIndex]
-                                        val fillColorArgb = selectedColor.toArgb()
-                                        val bitmapCopy = Bitmap.createBitmap(
-                                            layer.bitmap.width,
-                                            layer.bitmap.height,
-                                            Bitmap.Config.ARGB_8888
+                                        val action = FillDrawingAction(
+                                            currentLayerIndex,
+                                            intent.x,
+                                            intent.y,
+                                            selectedColor.toArgb(),
+                                            18f
                                         )
-                                        android.graphics.Canvas(bitmapCopy).drawBitmap(layer.bitmap, 0f, 0f, null)
-                                        val newBitmap = Bitmap.createBitmap(
-                                            layer.bitmap.width,
-                                            layer.bitmap.height,
-                                            Bitmap.Config.ARGB_8888
-                                        )
-                                        android.graphics.Canvas(newBitmap).drawBitmap(layer.bitmap, 0f, 0f, null)
-                                        ColorUtil.floodFill(
-                                            newBitmap,
-                                            intent.x.toInt(),
-                                            intent.y.toInt(),
-                                            fillColorArgb,
-                                            tolerance = 18f
-                                        )
-                                        layer.bitmap = newBitmap
-                                        layer.hasFill = true
-                                        redoStack.clear()
-                                        undoStack.add(UndoEntry.Fill(currentLayerIndex, bitmapCopy))
+                                        drawingEngine.executeAction(action, layerStates)
                                         saveAllLayers()
                                         canvasRefreshTrigger++
                                     }
                                 }
                                 is TapIntent.DrawDot -> {
                                     if (currentLayerIndex in layerStates.indices) {
-                                        val layer = layerStates[currentLayerIndex]
-                                        val bitmapBefore = Bitmap.createBitmap(layer.bitmap)
-                                        val canvas = android.graphics.Canvas(layer.bitmap)
-                                        val paint = Paint().apply {
-                                            isAntiAlias = true
-                                            color = intent.color.toArgb()
-                                            style = Paint.Style.FILL
-                                            if (intent.isEraser) {
-                                                xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
-                                            }
-                                        }
-                                        if (strokeCapStyle == StrokeCapStyle.ROUND) {
-                                            canvas.drawCircle(intent.x, intent.y, intent.dotRadiusBitmap, paint)
-                                        } else {
-                                            canvas.drawRect(
-                                                intent.x - intent.dotRadiusBitmap,
-                                                intent.y - intent.dotRadiusBitmap,
-                                                intent.x + intent.dotRadiusBitmap,
-                                                intent.y + intent.dotRadiusBitmap,
-                                                paint
-                                            )
-                                        }
-                                        undoStack.add(UndoEntry.Fill(currentLayerIndex, bitmapBefore))
-                                        redoStack.clear()
+                                        val action = DrawDotAction(
+                                            currentLayerIndex,
+                                            intent.x,
+                                            intent.y,
+                                            intent.dotRadiusBitmap,
+                                            intent.color,
+                                            intent.isEraser,
+                                            strokeCapStyle
+                                        )
+                                        drawingEngine.executeAction(action, layerStates)
                                         saveAllLayers()
                                         canvasRefreshTrigger++
                                     }
@@ -1012,56 +917,6 @@ private fun PreviewDot(
         }
     }
 }
-
-private fun drawStrokeOnBitmap(bitmap: Bitmap?, stroke: Stroke) {
-    val bmp = bitmap ?: return
-    val canvas = android.graphics.Canvas(bmp)
-    val paint = Paint().apply {
-        color = stroke.color.toArgb()
-        style = Paint.Style.STROKE
-        strokeWidth = stroke.strokeWidth
-        isAntiAlias = true
-        strokeJoin = if (stroke.strokeCapStyle == StrokeCapStyle.ROUND) Paint.Join.ROUND else Paint.Join.BEVEL
-        strokeCap = if (stroke.strokeCapStyle == StrokeCapStyle.ROUND) Paint.Cap.ROUND else Paint.Cap.BUTT
-        // For eraser, use CLEAR blend mode to erase pixels
-        if (stroke.tool == DrawTool.Eraser) {
-            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
-        }
-    }
-    val path = android.graphics.Path()
-    var lastX = 0f
-    var lastY = 0f
-    stroke.points.forEachIndexed { index, offset ->
-        if (index == 0) {
-            path.moveTo(offset.x, offset.y)
-            lastX = offset.x
-            lastY = offset.y
-        } else {
-            val dx = offset.x - lastX
-            val dy = offset.y - lastY
-            if (hypot(dx, dy) >= MIN_STROKE_SEGMENT_PX) {
-                path.lineTo(offset.x, offset.y)
-                lastX = offset.x
-                lastY = offset.y
-            }
-        }
-    }
-    if (stroke.closed && stroke.points.isNotEmpty()) {
-        val start = stroke.points.first()
-        if (stroke.strokeCapStyle == StrokeCapStyle.BUTT || stroke.points.size < 3) {
-            path.lineTo(start.x, start.y)
-        } else {
-            val end = stroke.points.last()
-            val prev = stroke.points[stroke.points.size - 2]
-            val controlX = end.x + (end.x - prev.x) * 0.75f
-            val controlY = end.y + (end.y - prev.y) * 0.75f
-            path.quadTo(controlX, controlY, start.x, start.y)
-        }
-        path.close()
-    }
-    canvas.drawPath(path, paint)
-}
-
 
 private fun generateLayerThumbnail(bitmap: Bitmap, size: Int = 80): Bitmap {
     if (bitmap.width <= 0 || bitmap.height <= 0) {
