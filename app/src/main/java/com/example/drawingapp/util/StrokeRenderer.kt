@@ -13,6 +13,8 @@ import com.example.drawingapp.data.Stroke
 import com.example.drawingapp.data.StrokeCapStyle
 import com.example.drawingapp.rendering.Renderer
 import kotlin.math.hypot
+import kotlin.math.max
+import kotlin.random.Random
 
 private const val MIN_STROKE_SEGMENT_PX = 0.5f
 
@@ -44,7 +46,15 @@ object StrokeRenderer : Renderer {
      */
     fun renderStroke(bitmap: Bitmap?, stroke: Stroke) {
         val bmp = bitmap ?: return
+        if (!bmp.isMutable) return
         val canvas = Canvas(bmp)
+        when (stroke.tool) {
+            DrawTool.OilPaint -> renderOilPaintStroke(canvas, stroke, bmp)
+            else -> renderNormalStroke(canvas, stroke)
+        }
+    }
+
+    private fun renderNormalStroke(canvas: Canvas, stroke: Stroke) {
         val paint = Paint().apply {
             color = stroke.color.toArgb()
             style = Paint.Style.STROKE
@@ -88,5 +98,87 @@ object StrokeRenderer : Renderer {
             path.close()
         }
         canvas.drawPath(path, paint)
+    }
+
+    private fun renderOilPaintStroke(canvas: Canvas, stroke: Stroke, targetBitmap: Bitmap) {
+        if (stroke.points.size < 2) return
+
+        val brushRadius = (stroke.strokeWidth / 2f).toInt().coerceAtLeast(4)
+        val half = brushRadius
+        val smearStrength = 0.68f
+        val paint = Paint().apply {
+            isAntiAlias = true
+            isFilterBitmap = true
+            style = Paint.Style.FILL
+        }
+        val tmpBufferSize = (brushRadius * 2 + 1).let { it * it }
+        val tmpBuffer = IntArray(tmpBufferSize)
+        val strokeColorArgb = stroke.color.toArgb()
+
+        stroke.points.windowed(size = 2, step = 1).forEach { (prev, curr) ->
+            val dx = curr.x - prev.x
+            val dy = curr.y - prev.y
+            val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+
+            if (dist < 1f) return@forEach
+
+            val steps = max(1, (dist / (brushRadius * 0.7f)).toInt())
+
+            for (i in 0..steps) {
+                val t = i.toFloat() / steps
+                val x = (prev.x + dx * t).toInt()
+                val y = (prev.y + dy * t).toInt()
+
+                val jitterX = x + Random.nextInt(-2, 3)
+                val jitterY = y + Random.nextInt(-2, 3)
+
+                val left = (jitterX - half).coerceIn(0, targetBitmap.width - 1)
+                val top = (jitterY - half).coerceIn(0, targetBitmap.height - 1)
+                val w = (brushRadius * 2 + 1).coerceAtMost(targetBitmap.width - left)
+                val h = (brushRadius * 2 + 1).coerceAtMost(targetBitmap.height - top)
+
+                targetBitmap.getPixels(tmpBuffer, 0, w, left, top, w, h)
+
+                var r = 0L
+                var g = 0L
+                var b = 0L
+                var count = 0
+                val pixelCount = w * h
+                for (i in 0 until pixelCount) {
+                    val px = tmpBuffer[i]
+                    if (android.graphics.Color.alpha(px) > 30) {
+                        r += android.graphics.Color.red(px)
+                        g += android.graphics.Color.green(px)
+                        b += android.graphics.Color.blue(px)
+                        count++
+                    }
+                }
+
+                val picked = if (count > 0) {
+                    android.graphics.Color.argb(
+                        255,
+                        (r / count).toInt().coerceIn(0, 255),
+                        (g / count).toInt().coerceIn(0, 255),
+                        (b / count).toInt().coerceIn(0, 255)
+                    )
+                } else {
+                    strokeColorArgb
+                }
+
+                val finalArgb = blendArgb(picked, strokeColorArgb, smearStrength)
+                paint.color = finalArgb
+                paint.alpha = (180..240).random()
+
+                canvas.drawCircle(jitterX.toFloat(), jitterY.toFloat(), brushRadius.toFloat(), paint)
+            }
+        }
+    }
+
+    private fun blendArgb(c1: Int, c2: Int, ratioTowardC2: Float): Int {
+        val ir = (1 - ratioTowardC2).coerceIn(0f, 1f)
+        val r = (android.graphics.Color.red(c1) * ir + android.graphics.Color.red(c2) * ratioTowardC2).toInt()
+        val g = (android.graphics.Color.green(c1) * ir + android.graphics.Color.green(c2) * ratioTowardC2).toInt()
+        val b = (android.graphics.Color.blue(c1) * ir + android.graphics.Color.blue(c2) * ratioTowardC2).toInt()
+        return android.graphics.Color.argb(255, r.coerceIn(0, 255), g.coerceIn(0, 255), b.coerceIn(0, 255))
     }
 }

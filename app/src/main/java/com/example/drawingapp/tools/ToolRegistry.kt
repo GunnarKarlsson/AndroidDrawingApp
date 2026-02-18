@@ -32,6 +32,7 @@ fun createDefaultToolRegistry(): ToolRegistry {
     registry.register(PencilTool())
     registry.register(MarkerPenTool())
     registry.register(EraserTool())
+    registry.register(OilPaintTool())
     registry.register(FillTool())
     registry.register(EyedropperTool())
     registry.register(PanTool())
