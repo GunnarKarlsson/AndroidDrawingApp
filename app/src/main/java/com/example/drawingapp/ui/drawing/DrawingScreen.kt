@@ -94,15 +94,18 @@ import com.example.drawingapp.data.LayerMeta
 import com.example.drawingapp.data.Stroke
 import com.example.drawingapp.data.StrokeCapStyle
 import com.example.drawingapp.data.StrokeData
+import com.example.drawingapp.tools.DrawingContext
+import com.example.drawingapp.tools.DrawingTool
+import com.example.drawingapp.tools.StrokeIntent
+import com.example.drawingapp.tools.TapIntent
+import com.example.drawingapp.tools.ToolRegistry
+import com.example.drawingapp.tools.ToolSettings
+import com.example.drawingapp.tools.createDefaultToolRegistry
 import com.example.drawingapp.util.ColorUtil
 import com.example.drawingapp.util.getExportDirectoryPath
-import com.example.drawingapp.util.shouldAutoClose
-import com.example.drawingapp.util.smoothStrokePoints
 import java.io.ByteArrayOutputStream
 
 
-private const val PENCIL_ALPHA = 0.75f
-private const val CLOSE_THRESHOLD_PX = 50f
 private const val MIN_STROKE_SEGMENT_PX = 0.5f
 private val STROKE_SIZE_RANGE = 1f..64f
 private const val DEFAULT_STROKE_SIZE_PX = 20f // ~30% into 1..64
@@ -116,32 +119,6 @@ private val HEADER_ICON_SIZE = 29.dp // 20% larger than default 24.dp
 private sealed class UndoEntry {
     data class Stroke(val layerIndex: Int, val stroke: com.example.drawingapp.data.Stroke? = null) : UndoEntry()
     data class Fill(val layerIndex: Int, val bitmapBeforeFill: Bitmap) : UndoEntry()
-}
-
-@Composable
-private fun getToolIconRes(tool: DrawTool): Int {
-    return when (tool) {
-        DrawTool.Pen -> R.drawable.ic_pen
-        DrawTool.Pencil -> R.drawable.ic_pencil
-        DrawTool.MarkerPen -> R.drawable.ic_marker
-        DrawTool.Eraser -> R.drawable.ic_eraser
-        DrawTool.Fill -> R.drawable.ic_fill
-        DrawTool.Eyedropper -> R.drawable.ic_eyedropper
-        DrawTool.Pan -> R.drawable.ic_pan
-    }
-}
-
-@Composable
-private fun getToolDisplayName(tool: DrawTool): String {
-    return when (tool) {
-        DrawTool.Pen -> "Pen"
-        DrawTool.Pencil -> "Pencil"
-        DrawTool.MarkerPen -> "Marker Pen"
-        DrawTool.Eraser -> "Eraser"
-        DrawTool.Fill -> "Fill"
-        DrawTool.Eyedropper -> "Eyedropper"
-        DrawTool.Pan -> "Pan"
-    }
 }
 
 private val DESATURATED_PRESETS = listOf(0f, 30f, 60f, 90f, 120f, 150f, 180f, 210f, 240f, 270f, 300f, 330f).map { hue ->
@@ -182,6 +159,10 @@ fun DrawingScreen(
     }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var selectedTool by remember { mutableStateOf(DrawTool.Pen) }
+    val toolRegistry = remember { createDefaultToolRegistry() }
+    val currentTool: DrawingTool = remember(selectedTool, toolRegistry) {
+        toolRegistry.getToolByEnum(selectedTool) ?: toolRegistry.getToolByEnum(DrawTool.Pen)!!
+    }
     var selectedColor by remember(initialStrokeColor) { mutableStateOf(initialStrokeColor) }
     var showColorPickerModal by remember { mutableStateOf(false) }
     var pendingColor by remember { mutableStateOf(selectedColor) }
@@ -210,15 +191,14 @@ fun DrawingScreen(
     val undoStack = remember(pageId) { mutableStateListOf<UndoEntry>() }
     val redoStack = remember(pageId) { mutableStateListOf<UndoEntry>() }
     val strokeWidth = strokeSizePx
-    val strokeColor = when (selectedTool) {
-        DrawTool.Pen -> selectedColor
-        DrawTool.Pencil -> selectedColor.copy(alpha = PENCIL_ALPHA)
-        DrawTool.MarkerPen -> selectedColor.copy(alpha = 0.6f) // Semi-transparent for marker effect
-        DrawTool.Eraser -> Color.Transparent // Eraser uses transparent color
-        DrawTool.Fill -> selectedColor // Fill uses selected color for the fill
-        DrawTool.Eyedropper -> selectedColor // Not used for drawing
-        DrawTool.Pan -> selectedColor // Not used when panning
-    }
+    val toolSettings = ToolSettings(
+        color = selectedColor,
+        strokeWidth = strokeSizePx,
+        strokeCapStyle = strokeCapStyle,
+        smoothingEnabled = curveSmoothingEnabled,
+        closingEnabled = curveClosingEnabled
+    )
+    val strokeColor = currentTool.transformColor(selectedColor, toolSettings)
 
     fun saveAllLayers() {
         if (layerStates.isNotEmpty()) {
@@ -359,8 +339,8 @@ fun DrawingScreen(
                                     onClick = { showToolSelectionModal = true }
                                 ) {
                                     Icon(
-                                        painter = painterResource(id = getToolIconRes(selectedTool)),
-                                        contentDescription = getToolDisplayName(selectedTool),
+                                        painter = painterResource(id = currentTool.iconRes),
+                                        contentDescription = currentTool.displayName,
                                         tint = HEADER_ICON_COLOR,
                                         modifier = Modifier.size(HEADER_ICON_SIZE)
                                     )
@@ -597,43 +577,47 @@ fun DrawingScreen(
                         }
                         view.currentLayerIndex = currentLayerIndex
                         view.canvasBackgroundColor = backgroundColor
-                        view.isPanning = (selectedTool == DrawTool.Pan)
+                        view.isPanning = currentTool.affectsViewInteraction()
                         view.strokePreviewColor = strokeColor.toArgb()
                         view.strokePreviewWidth = strokeWidth
                         view.strokePreviewCapRound = (strokeCapStyle == StrokeCapStyle.ROUND)
-                        view.strokePreviewIsEraser = (selectedTool == DrawTool.Eraser)
-                        view.enableDotPreview = (selectedTool in listOf(DrawTool.Pen, DrawTool.Pencil, DrawTool.MarkerPen, DrawTool.Eraser))
-                        view.onStrokeDrawn = { points, strokeWidthBitmap ->
+                        view.strokePreviewIsEraser = (currentTool.drawTool == DrawTool.Eraser)
+                        view.enableDotPreview = currentTool.supportsContinuousDrawing()
+                        view.onStrokeDrawn = { points, _ ->
                             if (currentLayerIndex in layerStates.indices && points.size > 1) {
-                                val pointsToUse = if (curveSmoothingEnabled) smoothStrokePoints(points) else points
-                                val closed = curveClosingEnabled && shouldAutoClose(pointsToUse, CLOSE_THRESHOLD_PX)
-                                val stroke = Stroke(
-                                    points = pointsToUse,
-                                    color = strokeColor,
-                                    strokeWidth = strokeWidthBitmap,
-                                    tool = selectedTool,
-                                    strokeCapStyle = strokeCapStyle,
-                                    closed = closed
-                                )
-                                val layer = layerStates[currentLayerIndex]
-                                layer.strokes.add(stroke)
-                                drawStrokeOnBitmap(layer.bitmap, stroke)
-                                redoStack.clear()
-                                undoStack.add(UndoEntry.Stroke(currentLayerIndex))
-                                saveAllLayers()
-                                canvasRefreshTrigger++
+                                val context = DrawingContext(currentLayerIndex, canvasSize, view.scale)
+                                val intent = currentTool.createAction(points, toolSettings, context)
+                                if (intent != null) {
+                                    val stroke = Stroke(
+                                        points = intent.points,
+                                        color = intent.color,
+                                        strokeWidth = intent.strokeWidth,
+                                        tool = intent.drawTool,
+                                        strokeCapStyle = intent.strokeCapStyle,
+                                        closed = intent.closed
+                                    )
+                                    val layer = layerStates[currentLayerIndex]
+                                    layer.strokes.add(stroke)
+                                    drawStrokeOnBitmap(layer.bitmap, stroke)
+                                    redoStack.clear()
+                                    undoStack.add(UndoEntry.Stroke(currentLayerIndex))
+                                    saveAllLayers()
+                                    canvasRefreshTrigger++
+                                }
                             }
                         }
                         view.onTap = { bx, by ->
-                            when (selectedTool) {
-                                DrawTool.Eyedropper -> compositeLayers()?.let { composite ->
+                            val context = DrawingContext(currentLayerIndex, canvasSize, view.scale)
+                            val intent = currentTool.handleTap(bx, by, toolSettings, context)
+                            when (intent) {
+                                is TapIntent.Eyedropper -> compositeLayers()?.let { composite ->
                                     val x = bx.toInt()
                                     val y = by.toInt()
                                     selectedColor = ColorUtil.getPixelColor(composite, x, y)
                                     onConfirmStrokeColor(selectedColor)
                                     selectedTool = DrawTool.Pen
                                 }
-                                DrawTool.Fill -> {
+                                is TapIntent.Fill -> {
                                     if (currentLayerIndex in layerStates.indices) {
                                         val layer = layerStates[currentLayerIndex]
                                         val fillColorArgb = selectedColor.toArgb()
@@ -651,8 +635,8 @@ fun DrawingScreen(
                                         android.graphics.Canvas(newBitmap).drawBitmap(layer.bitmap, 0f, 0f, null)
                                         ColorUtil.floodFill(
                                             newBitmap,
-                                            bx.toInt(),
-                                            by.toInt(),
+                                            intent.x.toInt(),
+                                            intent.y.toInt(),
                                             fillColorArgb,
                                             tolerance = 18f
                                         )
@@ -664,35 +648,27 @@ fun DrawingScreen(
                                         canvasRefreshTrigger++
                                     }
                                 }
-                                DrawTool.Pen, DrawTool.Pencil, DrawTool.MarkerPen, DrawTool.Eraser -> {
+                                is TapIntent.DrawDot -> {
                                     if (currentLayerIndex in layerStates.indices) {
                                         val layer = layerStates[currentLayerIndex]
-                                        val dotRadiusBitmap = ((strokeSizePx / view.scale) / 2f).coerceAtLeast(1.5f)
-                                        val dotColor = when (selectedTool) {
-                                            DrawTool.Pen -> selectedColor
-                                            DrawTool.Pencil -> selectedColor.copy(alpha = PENCIL_ALPHA)
-                                            DrawTool.MarkerPen -> selectedColor.copy(alpha = 0.6f)
-                                            DrawTool.Eraser -> Color.Transparent
-                                            else -> selectedColor
-                                        }
                                         val bitmapBefore = Bitmap.createBitmap(layer.bitmap)
                                         val canvas = android.graphics.Canvas(layer.bitmap)
                                         val paint = Paint().apply {
                                             isAntiAlias = true
-                                            color = dotColor.toArgb()
+                                            color = intent.color.toArgb()
                                             style = Paint.Style.FILL
-                                            if (selectedTool == DrawTool.Eraser) {
+                                            if (intent.isEraser) {
                                                 xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
                                             }
                                         }
                                         if (strokeCapStyle == StrokeCapStyle.ROUND) {
-                                            canvas.drawCircle(bx, by, dotRadiusBitmap, paint)
+                                            canvas.drawCircle(intent.x, intent.y, intent.dotRadiusBitmap, paint)
                                         } else {
                                             canvas.drawRect(
-                                                bx - dotRadiusBitmap,
-                                                by - dotRadiusBitmap,
-                                                bx + dotRadiusBitmap,
-                                                by + dotRadiusBitmap,
+                                                intent.x - intent.dotRadiusBitmap,
+                                                intent.y - intent.dotRadiusBitmap,
+                                                intent.x + intent.dotRadiusBitmap,
+                                                intent.y + intent.dotRadiusBitmap,
                                                 paint
                                             )
                                         }
@@ -702,7 +678,7 @@ fun DrawingScreen(
                                         canvasRefreshTrigger++
                                     }
                                 }
-                                else -> { }
+                                null -> { }
                             }
                         }
                     }
@@ -983,6 +959,7 @@ fun DrawingScreen(
     
     if (showToolSelectionModal) {
         ToolSelectionDialog(
+            toolRegistry = toolRegistry,
             selectedTool = selectedTool,
             onToolSelected = { tool ->
                 selectedTool = tool
@@ -1302,11 +1279,12 @@ private fun LayerManagerDialog(
 
 @Composable
 private fun ToolSelectionDialog(
+    toolRegistry: ToolRegistry,
     selectedTool: DrawTool,
     onToolSelected: (DrawTool) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val allTools = listOf(DrawTool.Pen, DrawTool.Pencil, DrawTool.MarkerPen, DrawTool.Eraser, DrawTool.Fill, DrawTool.Eyedropper, DrawTool.Pan)
+    val allTools = toolRegistry.getAllTools()
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1320,7 +1298,7 @@ private fun ToolSelectionDialog(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 allTools.forEach { tool ->
-                    val isSelected = tool == selectedTool
+                    val isSelected = tool.drawTool == selectedTool
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1335,28 +1313,23 @@ private fun ToolSelectionDialog(
                                     Modifier
                                 }
                             )
-                            .clickable { onToolSelected(tool) }
+                            .clickable { onToolSelected(tool.drawTool) }
                             .padding(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Tool icon
                         Icon(
-                            painter = painterResource(id = getToolIconRes(tool)),
-                            contentDescription = getToolDisplayName(tool),
+                            painter = painterResource(id = tool.iconRes),
+                            contentDescription = tool.displayName,
                             tint = HEADER_ICON_COLOR,
                             modifier = Modifier.size(24.dp)
                         )
-                        
-                        // Tool name
                         Text(
-                            text = getToolDisplayName(tool),
+                            text = tool.displayName,
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.weight(1f),
                             color = HEADER_ICON_COLOR
                         )
-                        
-                        // Checkmark
                         if (isSelected) {
                             Icon(
                                 Icons.Default.Check,
