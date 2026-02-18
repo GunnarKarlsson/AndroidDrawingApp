@@ -108,7 +108,10 @@ object StrokeRenderer : Renderer {
         val half = brushRadius
         val smearStrength = 0.5f
         val minCoverageToRefresh = 0.15f
-        val decayLengthPx = 80f
+        val decayLengthPx = 180f
+        val pickupOffsetPx = brushRadius * 0.8f
+        val runoutStartPx = 200f
+        val runoutLengthPx = 300f
         
         val paint = Paint().apply {
             isAntiAlias = true
@@ -124,6 +127,7 @@ object StrokeRenderer : Renderer {
         var carryStrength = 0f
         var lastDabX = Float.NaN
         var lastDabY = Float.NaN
+        var totalDistancePx = 0f
 
         stroke.points.windowed(size = 2, step = 1).forEach { (prev, curr) ->
             val dx = curr.x - prev.x
@@ -131,6 +135,11 @@ object StrokeRenderer : Renderer {
             val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
 
             if (dist < 1f) return@forEach
+
+            // Compute normalized direction for backward sampling
+            val len = dist.coerceAtLeast(0.001f) // Guard against division by zero
+            val nx = dx / len
+            val ny = dy / len
 
             val steps = max(1, (dist / (brushRadius * 0.7f)).toInt())
 
@@ -142,8 +151,20 @@ object StrokeRenderer : Renderer {
                 val jitterX = x + Random.nextInt(-2, 3)
                 val jitterY = y + Random.nextInt(-2, 3)
 
-                val left = (jitterX - half).coerceIn(0, targetBitmap.width - 1)
-                val top = (jitterY - half).coerceIn(0, targetBitmap.height - 1)
+                // Dab-to-dab distance (0 on first dab)
+                val dabDistPx = if (!lastDabX.isNaN() && !lastDabY.isNaN()) {
+                    hypot(jitterX - lastDabX, jitterY - lastDabY)
+                } else {
+                    0f
+                }
+
+                // Compute pickup point behind the dab along stroke direction
+                val pickupX = jitterX - nx * pickupOffsetPx
+                val pickupY = jitterY - ny * pickupOffsetPx
+
+                // Use pickup point for sampling (not dab position)
+                val left = (pickupX - half).toInt().coerceIn(0, targetBitmap.width - 1)
+                val top = (pickupY - half).toInt().coerceIn(0, targetBitmap.height - 1)
                 val w = (brushRadius * 2 + 1).coerceAtMost(targetBitmap.width - left)
                 val h = (brushRadius * 2 + 1).coerceAtMost(targetBitmap.height - top)
 
@@ -184,19 +205,21 @@ object StrokeRenderer : Renderer {
                     carryStrength = 1.0f
                 } else {
                     // Distance-based exponential decay
-                    if (!lastDabX.isNaN() && !lastDabY.isNaN()) {
-                        val dabDistPx = hypot(jitterX - lastDabX, jitterY - lastDabY)
-                        carryStrength *= exp(-dabDistPx / decayLengthPx).toFloat()
-                    } else {
-                        carryStrength = 0f
-                    }
+                    carryStrength *= exp(-dabDistPx / decayLengthPx).toFloat()
                 }
                 
                 // Blend picked color with carried color based on carryStrength
                 val baseFromCanvas = blendArgb(picked, carriedColorArgb, carryStrength)
                 
-                // Then blend with stroke color (existing oil paint behavior)
-                val finalArgb = blendArgb(baseFromCanvas, strokeColorArgb, smearStrength)
+                // Brush runout: original (dipped) color depletes over stroke length
+                totalDistancePx += dabDistPx
+                val paintAmount = if (totalDistancePx <= runoutStartPx) {
+                    1f
+                } else {
+                    (1f - (totalDistancePx - runoutStartPx) / runoutLengthPx).coerceIn(0f, 1f)
+                }
+                val effectiveSmear = smearStrength * paintAmount
+                val finalArgb = blendArgb(baseFromCanvas, strokeColorArgb, effectiveSmear)
                 paint.color = finalArgb
                 paint.alpha = (180..240).random()
 
