@@ -1,19 +1,20 @@
 package com.example.drawingapp.actions
 
+import com.example.drawingapp.rendering.Renderer
 import com.example.drawingapp.ui.drawing.LayerState
 
 /**
  * Holds undo/redo stacks and executes or reverts DrawingActions.
- * Does not hold layers; receives them on each call.
+ * Does not hold layers; receives them on each call. All bitmap drawing is delegated to [renderer].
  */
-class DrawingEngine {
+class DrawingEngine(private val renderer: Renderer) {
 
     private val undoStack = mutableListOf<Pair<DrawingAction, DrawingActionResult>>()
     private val redoStack = mutableListOf<Pair<DrawingAction, DrawingActionResult>>()
 
     fun executeAction(action: DrawingAction, layers: List<LayerState>) {
         val layer = layers.getOrNull(action.layerIndex) ?: return
-        val result = action.execute(layer)
+        val result = action.execute(layer, renderer)
         undoStack.add(action to result)
         redoStack.clear()
     }
@@ -22,7 +23,7 @@ class DrawingEngine {
         if (undoStack.isEmpty()) return
         val (action, result) = undoStack.removeAt(undoStack.lastIndex)
         val layer = layers.getOrNull(action.layerIndex) ?: return
-        action.undo(layer, result)
+        action.undo(layer, result, renderer)
         redoStack.add(action to result)
     }
 

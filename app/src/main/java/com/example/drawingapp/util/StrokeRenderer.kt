@@ -5,20 +5,44 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import androidx.compose.ui.graphics.toArgb
+import com.example.drawingapp.actions.DrawingAction
+import com.example.drawingapp.actions.RedrawStrokesAction
+import com.example.drawingapp.actions.StrokeDrawingAction
 import com.example.drawingapp.data.DrawTool
 import com.example.drawingapp.data.Stroke
 import com.example.drawingapp.data.StrokeCapStyle
+import com.example.drawingapp.rendering.Renderer
 import kotlin.math.hypot
 
 private const val MIN_STROKE_SEGMENT_PX = 0.5f
 
 /**
- * Renders a single Stroke onto a Bitmap. Used by StrokeDrawingAction and for
- * redrawing the layer bitmap when undoing a stroke.
+ * Renders strokes onto a bitmap. Implements [Renderer] for [StrokeDrawingAction]
+ * and [RedrawStrokesAction] (undo redraw). All path/paint logic is in [renderStroke].
  */
-object StrokeRenderer {
+object StrokeRenderer : Renderer {
 
-    fun render(bitmap: Bitmap?, stroke: Stroke) {
+    override fun render(bitmap: Bitmap, action: DrawingAction): Bitmap? {
+        when (action) {
+            is StrokeDrawingAction -> {
+                val stroke = action.buildStroke()
+                renderStroke(bitmap, stroke)
+                return null
+            }
+            is RedrawStrokesAction -> {
+                bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
+                action.strokes.forEach { renderStroke(bitmap, it) }
+                return null
+            }
+            else -> return null
+        }
+    }
+
+    /**
+     * Renders a single stroke onto the bitmap. Used for both drawing a new stroke
+     * and redrawing the layer when undoing.
+     */
+    fun renderStroke(bitmap: Bitmap?, stroke: Stroke) {
         val bmp = bitmap ?: return
         val canvas = Canvas(bmp)
         val paint = Paint().apply {

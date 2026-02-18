@@ -94,6 +94,7 @@ import com.example.drawingapp.data.StrokeCapStyle
 import com.example.drawingapp.data.StrokeData
 import com.example.drawingapp.actions.DrawDotAction
 import com.example.drawingapp.actions.DrawingEngine
+import com.example.drawingapp.rendering.CompositeRenderer
 import com.example.drawingapp.actions.FillDrawingAction
 import com.example.drawingapp.actions.StrokeDrawingAction
 import com.example.drawingapp.tools.DrawingContext
@@ -182,7 +183,7 @@ fun DrawingScreen(
     var showToolSelectionModal by remember { mutableStateOf(false) }
     var drawingViewRef by remember { mutableStateOf<DrawingView?>(null) }
     var canvasRefreshTrigger by remember { mutableStateOf(0) }
-    val drawingEngine = remember(pageId) { DrawingEngine() }
+    val drawingEngine = remember(pageId) { DrawingEngine(CompositeRenderer()) }
     val strokeWidth = strokeSizePx
     val toolSettings = ToolSettings(
         color = selectedColor,
