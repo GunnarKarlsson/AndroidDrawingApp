@@ -16,7 +16,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private const val EXPORT_SUBDIR = "DrawingApp"
+private const val EXPORT_SUBDIR = "AndroidDrawingApp"
 private const val RELATIVE_PATH_PICTURES = "Pictures/$EXPORT_SUBDIR"
 
 @Suppress("UNUSED_PARAMETER")

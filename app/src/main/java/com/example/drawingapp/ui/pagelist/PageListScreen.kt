@@ -27,6 +27,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import com.example.drawingapp.R
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -81,7 +82,7 @@ fun PageListScreen(
                     titleContentColor = PAGE_LIST_ICON_COLOR,
                     actionIconContentColor = PAGE_LIST_ICON_COLOR
                 ),
-                title = { Text("DrawApp", color = PAGE_LIST_ICON_COLOR) },
+                title = { Text(stringResource(R.string.app_name), color = PAGE_LIST_ICON_COLOR) },
                 actions = {
                     IconButton(onClick = onSettingsClick) {
                         Icon(

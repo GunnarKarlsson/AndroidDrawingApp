@@ -1,4 +1,4 @@
-# DrawApp
+# AndroidDrawingApp
 
 Android drawing app (Kotlin, Jetpack Compose + a custom `View` canvas). Organize work into notebooks and pages, draw on stacked bitmap layers, and export PNG.
 
@@ -52,7 +52,7 @@ Stroke tools also place a **dot on tap** (circle or square, matching the cap sty
 ### Persistence and export
 - Pages saved locally as layer PNGs plus JSON stroke metadata (`filesDir/pages/`)
 - Tool prefs (size, color, cap, smoothing, closing, favorites) in SharedPreferences
-- Export composited PNG to `Pictures/DrawingApp` and share via the system sheet
+- Export composited PNG to `Pictures/AndroidDrawingApp` and share via the system sheet
 - Optional AWS S3 backup/restore (Cognito + bucket; only if `AWS_S3_BUCKET` and `AWS_COGNITO_POOL_ID` are set in `app/build.gradle.kts`)
 
 ## How drawing is implemented

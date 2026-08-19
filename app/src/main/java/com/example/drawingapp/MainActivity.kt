@@ -36,7 +36,7 @@ import com.example.drawingapp.ui.notebooklist.NotebookListScreen
 import com.example.drawingapp.ui.notebooklist.NotebookPagesScreen
 import com.example.drawingapp.ui.pagelist.PageListScreen
 import com.example.drawingapp.ui.settings.SettingsScreen
-import com.example.drawingapp.ui.theme.ExampleDrawingAppTheme
+import com.example.drawingapp.ui.theme.AndroidDrawingAppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            ExampleDrawingAppTheme {
+            AndroidDrawingAppTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val context = LocalContext.current
                     val appContext = context.applicationContext
@@ -182,7 +182,7 @@ class MainActivity : ComponentActivity() {
                                 onSaveBackgroundColor = { id, color -> repo.savePageBackgroundColor(id, color) },
                                 onExport = { bmp ->
                                     exportDrawingAsPng(context, bmp)?.let { uri ->
-                                        Toast.makeText(context, "Saved to Pictures/DrawingApp", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Saved to Pictures/AndroidDrawingApp", Toast.LENGTH_SHORT).show()
                                         shareUri(context, uri)
                                     }
                                 },

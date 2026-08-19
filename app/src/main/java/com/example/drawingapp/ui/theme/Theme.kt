@@ -25,7 +25,7 @@ private val LightColorScheme = lightColorScheme(
 )
 
 @Composable
-fun ExampleDrawingAppTheme(
+fun AndroidDrawingAppTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {

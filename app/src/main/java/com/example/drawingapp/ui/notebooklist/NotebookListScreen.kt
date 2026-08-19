@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
@@ -89,7 +90,7 @@ fun NotebookListScreen(
                     titleContentColor = NOTEBOOK_LIST_ICON_COLOR,
                     actionIconContentColor = NOTEBOOK_LIST_ICON_COLOR
                 ),
-                title = { Text("DrawApp", color = NOTEBOOK_LIST_ICON_COLOR) },
+                title = { Text(stringResource(R.string.app_name), color = NOTEBOOK_LIST_ICON_COLOR) },
                 actions = {
                     IconButton(onClick = onSettingsClick) {
                         Icon(
